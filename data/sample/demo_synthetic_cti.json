@@ -1,0 +1,216 @@
+{
+  "metadata": {
+    "dataset_name": "ThreatMind Synthetic CTI Validation Dataset",
+    "description": "Small synthetic dataset explicitly created for development testing and verification of knowledge graph traversal.",
+    "is_synthetic": true,
+    "disclaimer": "SYNTHETIC DEMO DATA ONLY. Relationships represent sample CTI graph nodes for integration verification."
+  },
+  "sources": [
+    {
+      "id": "source_demo_001",
+      "title": "Synthetic CTI Report: APT29 Campaign Analysis",
+      "url": "https://threatmind.demo/advisories/APT29-2026-SYNTHETIC",
+      "publisher": "ThreatMind Demo Research Labs",
+      "published_date": "2026-01-15",
+      "source_type": "demo_synthetic",
+      "is_synthetic": true
+    }
+  ],
+  "nodes": [
+    {
+      "label": "ThreatActor",
+      "properties": {
+        "id": "actor_apt29",
+        "name": "APT29",
+        "aliases": ["Cozy Bear", "The Dukes", "NOBELIUM"],
+        "description": "Synthetic threat actor profile based on reported cyber espionage group behaviors.",
+        "is_synthetic": true
+      }
+    },
+    {
+      "label": "Malware",
+      "properties": {
+        "id": "malware_cobaltstrike",
+        "name": "Cobalt Strike",
+        "aliases": ["Beacon"],
+        "description": "Commercial adversary simulation software frequently leveraged by threat actors.",
+        "is_synthetic": true
+      }
+    },
+    {
+      "label": "Tool",
+      "properties": {
+        "id": "tool_mimikatz",
+        "name": "Mimikatz",
+        "aliases": ["Credential Dumper"],
+        "description": "Post-exploitation tool used for credential extraction.",
+        "is_synthetic": true
+      }
+    },
+    {
+      "label": "Technique",
+      "properties": {
+        "id": "tech_t1059_001",
+        "name": "PowerShell",
+        "external_id": "T1059.001",
+        "description": "Execution of commands using interactive PowerShell scripts.",
+        "is_synthetic": true
+      }
+    },
+    {
+      "label": "Tactic",
+      "properties": {
+        "id": "tactic_ta0002",
+        "name": "Execution",
+        "external_id": "TA0002",
+        "description": "Techniques that result in adversary-controlled code running on a local or remote system.",
+        "is_synthetic": true
+      }
+    },
+    {
+      "label": "Vulnerability",
+      "properties": {
+        "id": "vuln_cve_2021_44228",
+        "name": "CVE-2021-44228",
+        "aliases": ["Log4Shell"],
+        "description": "Remote code execution vulnerability in Apache Log4j JNDI features.",
+        "is_synthetic": true
+      }
+    },
+    {
+      "label": "Product",
+      "properties": {
+        "id": "prod_log4j",
+        "name": "Apache Log4j",
+        "vendor": "Apache",
+        "version": "2.14.1",
+        "is_synthetic": true
+      }
+    },
+    {
+      "label": "OperatingSystem",
+      "properties": {
+        "id": "os_windows_10",
+        "name": "Windows 10",
+        "version": "21H2",
+        "is_synthetic": true
+      }
+    },
+    {
+      "label": "Organization",
+      "properties": {
+        "id": "org_gov_sector",
+        "name": "Government Sector",
+        "sector": "Government",
+        "is_synthetic": true
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source_id": "actor_apt29",
+      "source_label": "ThreatActor",
+      "rel_type": "USES",
+      "target_id": "malware_cobaltstrike",
+      "target_label": "Malware",
+      "provenance": {
+        "source_id": "source_demo_001",
+        "source_url": "https://threatmind.demo/advisories/APT29-2026-SYNTHETIC",
+        "evidence_text": "[Synthetic Evidence] APT29 has deployed Cobalt Strike Beacon payloads during lateral movement operations.",
+        "published_date": "2026-01-15",
+        "extraction_method": "demo_synthetic_ingestion",
+        "confidence": null
+      }
+    },
+    {
+      "source_id": "actor_apt29",
+      "source_label": "ThreatActor",
+      "rel_type": "USES",
+      "target_id": "tool_mimikatz",
+      "target_label": "Tool",
+      "provenance": {
+        "source_id": "source_demo_001",
+        "source_url": "https://threatmind.demo/advisories/APT29-2026-SYNTHETIC",
+        "evidence_text": "[Synthetic Evidence] APT29 leveraged Mimikatz to extract LSASS memory credentials.",
+        "published_date": "2026-01-15",
+        "extraction_method": "demo_synthetic_ingestion",
+        "confidence": null
+      }
+    },
+    {
+      "source_id": "malware_cobaltstrike",
+      "source_label": "Malware",
+      "rel_type": "USES_TECHNIQUE",
+      "target_id": "tech_t1059_001",
+      "target_label": "Technique",
+      "provenance": {
+        "source_id": "source_demo_001",
+        "source_url": "https://threatmind.demo/advisories/APT29-2026-SYNTHETIC",
+        "evidence_text": "[Synthetic Evidence] Cobalt Strike Beacon invokes PowerShell (T1059.001) scripts for stager execution.",
+        "published_date": "2026-01-15",
+        "extraction_method": "demo_synthetic_ingestion",
+        "confidence": null
+      }
+    },
+    {
+      "source_id": "tech_t1059_001",
+      "source_label": "Technique",
+      "rel_type": "PART_OF",
+      "target_id": "tactic_ta0002",
+      "target_label": "Tactic",
+      "provenance": {
+        "source_id": "source_demo_001",
+        "source_url": "https://threatmind.demo/advisories/APT29-2026-SYNTHETIC",
+        "evidence_text": "[Synthetic Evidence] PowerShell is classified under the MITRE Execution tactic.",
+        "published_date": "2026-01-15",
+        "extraction_method": "demo_synthetic_ingestion",
+        "confidence": null
+      }
+    },
+    {
+      "source_id": "actor_apt29",
+      "source_label": "ThreatActor",
+      "rel_type": "EXPLOITS",
+      "target_id": "vuln_cve_2021_44228",
+      "target_label": "Vulnerability",
+      "provenance": {
+        "source_id": "source_demo_001",
+        "source_url": "https://threatmind.demo/advisories/APT29-2026-SYNTHETIC",
+        "evidence_text": "[Synthetic Evidence] APT29 targeted unpatched Apache Log4j instances using CVE-2021-44228 exploits.",
+        "published_date": "2026-01-15",
+        "extraction_method": "demo_synthetic_ingestion",
+        "confidence": null
+      }
+    },
+    {
+      "source_id": "vuln_cve_2021_44228",
+      "source_label": "Vulnerability",
+      "rel_type": "AFFECTS",
+      "target_id": "prod_log4j",
+      "target_label": "Product",
+      "provenance": {
+        "source_id": "source_demo_001",
+        "source_url": "https://threatmind.demo/advisories/APT29-2026-SYNTHETIC",
+        "evidence_text": "[Synthetic Evidence] CVE-2021-44228 affects Apache Log4j versions 2.0-beta9 through 2.14.1.",
+        "published_date": "2026-01-15",
+        "extraction_method": "demo_synthetic_ingestion",
+        "confidence": null
+      }
+    },
+    {
+      "source_id": "actor_apt29",
+      "source_label": "ThreatActor",
+      "rel_type": "TARGETS",
+      "target_id": "org_gov_sector",
+      "target_label": "Organization",
+      "provenance": {
+        "source_id": "source_demo_001",
+        "source_url": "https://threatmind.demo/advisories/APT29-2026-SYNTHETIC",
+        "evidence_text": "[Synthetic Evidence] APT29 historically targets diplomatic and government sector organizations.",
+        "published_date": "2026-01-15",
+        "extraction_method": "demo_synthetic_ingestion",
+        "confidence": null
+      }
+    }
+  ]
+}

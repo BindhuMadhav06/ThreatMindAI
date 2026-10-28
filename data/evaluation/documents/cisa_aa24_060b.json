@@ -1,0 +1,13 @@
+{
+  "source_id": "cisa_aa24_060b",
+  "title": "Threat Actors Exploit Multiple Vulnerabilities in Ivanti Connect Secure and Policy Secure Gateways",
+  "canonical_title": "Threat Actors Exploit Multiple Vulnerabilities in Ivanti Connect Secure and Policy Secure Gateways",
+  "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-060b",
+  "publisher": "Cybersecurity and Infrastructure Security Agency",
+  "published_date": "2024-02-29",
+  "last_revised_date": "2024-02-29",
+  "retrieval_date": "2026-10-10",
+  "license": "US Government Public Domain (17 U.S.C. 105)",
+  "is_synthetic": false,
+  "raw_text": "CISA released joint cybersecurity advisory AA24-060B regarding widespread active exploitation of multiple vulnerabilities in Ivanti Connect Secure and Ivanti Policy Secure gateways. The first flaw, CVE-2023-46805, is an authentication bypass vulnerability affecting web components of Ivanti Connect Secure. The second flaw, CVE-2024-21887, is a command injection vulnerability in the management interface of Ivanti Connect Secure that allows authenticated administrators to send crafted requests and execute arbitrary commands. Threat actors chain CVE-2023-46805 and CVE-2024-21887 to bypass authentication and achieve unauthenticated remote code execution on vulnerable Ivanti appliances. Following successful exploitation, malicious actors frequently drop custom web shells to establish persistent command execution capabilities on compromised network perimeter devices."
+}

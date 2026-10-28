@@ -1,0 +1,464 @@
+{
+  "benchmark_name": "ThreatMind Research Evaluation",
+  "version": "1.0.0",
+  "execution_mode": "OFFLINE_DETERMINISTIC",
+  "timestamp": "2026-10-14T09:09:08.794889+00:00",
+  "total_queries": 15,
+  "entity_extraction": null,
+  "relation_extraction": null,
+  "retrieval": {
+    "k": 5,
+    "precision_at_k": {
+      "numerator": 14,
+      "denominator": 41,
+      "value": 0.3415,
+      "formatted": "14/41 (34.1%)"
+    },
+    "recall_at_k": {
+      "numerator": 14,
+      "denominator": 24,
+      "value": 0.5833,
+      "formatted": "14/24 (58.3%)"
+    },
+    "unresolvable_entity_count": 2,
+    "unresolvable_query_rate": {
+      "numerator": 2,
+      "denominator": 15,
+      "value": 0.1333,
+      "formatted": "2/15 (13.3%)"
+    },
+    "zero_resolved_seed_rate": {
+      "numerator": 2,
+      "denominator": 15,
+      "value": 0.1333,
+      "formatted": "2/15 (13.3%)"
+    },
+    "entity_mention_resolution_rate": {
+      "numerator": 21,
+      "denominator": 24,
+      "value": 0.875,
+      "formatted": "21/24 (87.5%)"
+    }
+  },
+  "reasoning": {
+    "path_validity_rate": {
+      "numerator": 70,
+      "denominator": 70,
+      "value": 1.0,
+      "formatted": "70/70 (100.0%)"
+    },
+    "path_continuity_rate": {
+      "numerator": 70,
+      "denominator": 70,
+      "value": 1.0,
+      "formatted": "70/70 (100.0%)"
+    },
+    "cycle_rejection_rate": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null,
+      "formatted": "0/0 (N/A)"
+    },
+    "total_evaluated_paths": 70,
+    "accepted_paths": 70,
+    "rejected_paths": 0
+  },
+  "grounding": {
+    "citation_correctness_rate": {
+      "numerator": 71,
+      "denominator": 71,
+      "value": 1.0,
+      "formatted": "71/71 (100.0%)"
+    },
+    "citation_completeness_rate": {
+      "numerator": 78,
+      "denominator": 78,
+      "value": 1.0,
+      "formatted": "78/78 (100.0%)"
+    },
+    "unsupported_claim_rate": {
+      "numerator": 0,
+      "denominator": 78,
+      "value": 0.0,
+      "formatted": "0/78 (0.0%)"
+    },
+    "total_claims": 78,
+    "verified_claims": 78,
+    "unverified_claims": 0,
+    "total_citations": 71,
+    "valid_citations": 71
+  },
+  "abstention": {
+    "precision": {
+      "numerator": 5,
+      "denominator": 5,
+      "value": 1.0,
+      "formatted": "5/5 (100.0%)"
+    },
+    "recall": {
+      "numerator": 5,
+      "denominator": 5,
+      "value": 1.0,
+      "formatted": "5/5 (100.0%)"
+    },
+    "false_abstention_rate": {
+      "numerator": 0,
+      "denominator": 10,
+      "value": 0.0,
+      "formatted": "0/10 (0.0%)"
+    },
+    "tp_abstain": 5,
+    "fp_abstain": 0,
+    "tn_answer": 10,
+    "fn_answer": 0
+  },
+  "baseline_comparisons": {
+    "baseline_a_keyword": {
+      "name": "Keyword Lookup Baseline",
+      "abstention_precision": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null,
+        "formatted": "0/0 (N/A)"
+      },
+      "abstention_recall": {
+        "numerator": 0,
+        "denominator": 5,
+        "value": 0.0,
+        "formatted": "0/5 (0.0%)"
+      },
+      "false_abstention_rate": {
+        "numerator": 0,
+        "denominator": 10,
+        "value": 0.0,
+        "formatted": "0/10 (0.0%)"
+      },
+      "supports_multi_hop": false,
+      "supports_provenance_drawer": false
+    },
+    "baseline_b_onehop": {
+      "name": "1-Hop Graph Retrieval Baseline",
+      "abstention_precision": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1.0,
+        "formatted": "2/2 (100.0%)"
+      },
+      "abstention_recall": {
+        "numerator": 2,
+        "denominator": 5,
+        "value": 0.4,
+        "formatted": "2/5 (40.0%)"
+      },
+      "false_abstention_rate": {
+        "numerator": 0,
+        "denominator": 10,
+        "value": 0.0,
+        "formatted": "0/10 (0.0%)"
+      },
+      "supports_multi_hop": false,
+      "supports_provenance_drawer": true
+    },
+    "threatmind_pipeline": {
+      "name": "ThreatMind Full Pipeline",
+      "abstention_precision": {
+        "numerator": 5,
+        "denominator": 5,
+        "value": 1.0,
+        "formatted": "5/5 (100.0%)"
+      },
+      "abstention_recall": {
+        "numerator": 5,
+        "denominator": 5,
+        "value": 1.0,
+        "formatted": "5/5 (100.0%)"
+      },
+      "false_abstention_rate": {
+        "numerator": 0,
+        "denominator": 10,
+        "value": 0.0,
+        "formatted": "0/10 (0.0%)"
+      },
+      "retrieval_precision_at_5": {
+        "numerator": 14,
+        "denominator": 41,
+        "value": 0.3415,
+        "formatted": "14/41 (34.1%)"
+      },
+      "retrieval_recall_at_5": {
+        "numerator": 14,
+        "denominator": 24,
+        "value": 0.5833,
+        "formatted": "14/24 (58.3%)"
+      },
+      "path_validity_rate": {
+        "numerator": 70,
+        "denominator": 70,
+        "value": 1.0,
+        "formatted": "70/70 (100.0%)"
+      },
+      "citation_correctness_rate": {
+        "numerator": 71,
+        "denominator": 71,
+        "value": 1.0,
+        "formatted": "71/71 (100.0%)"
+      },
+      "unsupported_claim_rate": {
+        "numerator": 0,
+        "denominator": 78,
+        "value": 0.0,
+        "formatted": "0/78 (0.0%)"
+      },
+      "supports_multi_hop": true,
+      "supports_provenance_drawer": true
+    }
+  },
+  "query_records": [
+    {
+      "query_id": "q_01",
+      "category": "factual_direct",
+      "question": "What malware is associated with APT29?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 12,
+      "active_paths_count": 10,
+      "claims_count": 12,
+      "verified_claims_count": 12,
+      "citations_count": 10,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_02",
+      "category": "factual_direct",
+      "question": "What malware does Sandworm Team use?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 8,
+      "active_paths_count": 8,
+      "claims_count": 8,
+      "verified_claims_count": 8,
+      "citations_count": 8,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_03",
+      "category": "factual_direct",
+      "question": "What vulnerability affects Apache Log4j?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 1,
+      "active_paths_count": 1,
+      "claims_count": 1,
+      "verified_claims_count": 1,
+      "citations_count": 1,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_04",
+      "category": "factual_direct",
+      "question": "Which products are affected by CVE-2023-46805?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 1,
+      "active_paths_count": 1,
+      "claims_count": 1,
+      "verified_claims_count": 1,
+      "citations_count": 2,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_05",
+      "category": "factual_direct",
+      "question": "What techniques does Volt Typhoon use?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 4,
+      "active_paths_count": 4,
+      "claims_count": 4,
+      "verified_claims_count": 4,
+      "citations_count": 4,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_06",
+      "category": "multi_hop",
+      "question": "How does APT29 attack systems?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 12,
+      "active_paths_count": 10,
+      "claims_count": 12,
+      "verified_claims_count": 12,
+      "citations_count": 10,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_07",
+      "category": "multi_hop",
+      "question": "Which vulnerabilities and products are associated with APT29 intrusions?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 12,
+      "active_paths_count": 10,
+      "claims_count": 12,
+      "verified_claims_count": 12,
+      "citations_count": 10,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_08",
+      "category": "multi_hop",
+      "question": "What organizations are targeted by Sandworm Team?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 8,
+      "active_paths_count": 8,
+      "claims_count": 8,
+      "verified_claims_count": 8,
+      "citations_count": 8,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_09",
+      "category": "factual_direct",
+      "question": "What techniques are associated with Sandworm Team?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 8,
+      "active_paths_count": 8,
+      "claims_count": 8,
+      "verified_claims_count": 8,
+      "citations_count": 8,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_10",
+      "category": "factual_direct",
+      "question": "What techniques does APT29 use for credential access and collection?",
+      "must_abstain": false,
+      "predicted_abstain": false,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 12,
+      "active_paths_count": 10,
+      "claims_count": 12,
+      "verified_claims_count": 12,
+      "citations_count": 10,
+      "grounding_status": "fully_grounded",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_11",
+      "category": "unanswerable_unknown_actor",
+      "question": "What malware is used by PhantomSpider99?",
+      "must_abstain": true,
+      "predicted_abstain": true,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 0,
+      "active_paths_count": 0,
+      "claims_count": 0,
+      "verified_claims_count": 0,
+      "citations_count": 0,
+      "grounding_status": "insufficient_evidence",
+      "unresolved_entities": [
+        "PhantomSpider99"
+      ],
+      "notes": []
+    },
+    {
+      "query_id": "q_12",
+      "category": "unanswerable_undocumented_cve",
+      "question": "What products are affected by CVE-2099-99999?",
+      "must_abstain": true,
+      "predicted_abstain": true,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 0,
+      "active_paths_count": 0,
+      "claims_count": 0,
+      "verified_claims_count": 0,
+      "citations_count": 0,
+      "grounding_status": "insufficient_evidence",
+      "unresolved_entities": [
+        "CVE-2099-99999"
+      ],
+      "notes": []
+    },
+    {
+      "query_id": "q_13",
+      "category": "unanswerable_no_relationship",
+      "question": "Did Volt Typhoon deploy BlackEnergy malware?",
+      "must_abstain": true,
+      "predicted_abstain": true,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 0,
+      "active_paths_count": 0,
+      "claims_count": 0,
+      "verified_claims_count": 0,
+      "citations_count": 0,
+      "grounding_status": "insufficient_evidence",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_14",
+      "category": "unanswerable_no_relationship",
+      "question": "Does Sandworm Team exploit CVE-2021-44228 in Apache Log4j?",
+      "must_abstain": true,
+      "predicted_abstain": true,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 0,
+      "active_paths_count": 0,
+      "claims_count": 0,
+      "verified_claims_count": 0,
+      "citations_count": 0,
+      "grounding_status": "insufficient_evidence",
+      "unresolved_entities": [],
+      "notes": []
+    },
+    {
+      "query_id": "q_15",
+      "category": "adversarial_false_premise",
+      "question": "How did APT29 use Olympic Destroyer to attack the Ukrainian power grid?",
+      "must_abstain": true,
+      "predicted_abstain": true,
+      "is_abstention_correct": true,
+      "retrieved_facts_count": 0,
+      "active_paths_count": 0,
+      "claims_count": 0,
+      "verified_claims_count": 0,
+      "citations_count": 0,
+      "grounding_status": "insufficient_evidence",
+      "unresolved_entities": [
+        "Ukrainian"
+      ],
+      "notes": []
+    }
+  ]
+}

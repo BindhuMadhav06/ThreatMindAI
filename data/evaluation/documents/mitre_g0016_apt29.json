@@ -1,0 +1,13 @@
+{
+  "source_id": "mitre_g0016_apt29",
+  "title": "MITRE ATT&CK Group G0016: APT29",
+  "canonical_title": "APT29, Enterprise ATT&CK Group G0016",
+  "url": "https://attack.mitre.org/groups/G0016/",
+  "publisher": "MITRE Corporation",
+  "published_date": "2024-03-25",
+  "last_revised_date": "2024-03-25",
+  "retrieval_date": "2026-10-10",
+  "license": "MITRE ATT&CK Terms of Use",
+  "is_synthetic": false,
+  "raw_text": "APT29 is a cyber espionage group attributed to Russia's Foreign Intelligence Service (SVR). In observed intrusions, APT29 uses PowerShell commands and scripts to execute malicious payloads, discover system information, and automate lateral movement. To establish and maintain access to enterprise victim environments, APT29 uses Valid Accounts, obtaining legitimate user and administrative credentials to log into cloud and on-premises infrastructure undetected. Before exfiltrating stolen intelligence, APT29 uses Archive Collected Data by compressing sensitive documents into password-protected ZIP and RAR archives to conceal data transfers from network inspection controls."
+}

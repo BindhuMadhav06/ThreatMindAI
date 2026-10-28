@@ -1,0 +1,97 @@
+{
+  "benchmark_name": "ThreatMind CTI Evaluation Benchmark",
+  "version": "1.0.0",
+  "total_queries": 15,
+  "queries": [
+    {
+      "query_id": "q_01",
+      "category": "factual_direct",
+      "question": "What malware is associated with APT29?",
+      "complexity": "1-hop"
+    },
+    {
+      "query_id": "q_02",
+      "category": "factual_direct",
+      "question": "What malware does Sandworm Team use?",
+      "complexity": "1-hop"
+    },
+    {
+      "query_id": "q_03",
+      "category": "factual_direct",
+      "question": "What vulnerability affects Apache Log4j?",
+      "complexity": "1-hop"
+    },
+    {
+      "query_id": "q_04",
+      "category": "factual_direct",
+      "question": "Which products are affected by CVE-2023-46805?",
+      "complexity": "1-hop"
+    },
+    {
+      "query_id": "q_05",
+      "category": "factual_direct",
+      "question": "What techniques does Volt Typhoon use?",
+      "complexity": "1-hop"
+    },
+    {
+      "query_id": "q_06",
+      "category": "multi_hop",
+      "question": "How does APT29 attack systems?",
+      "complexity": "2-hop"
+    },
+    {
+      "query_id": "q_07",
+      "category": "multi_hop",
+      "question": "Which vulnerabilities and products are associated with APT29 intrusions?",
+      "complexity": "2-hop"
+    },
+    {
+      "query_id": "q_08",
+      "category": "multi_hop",
+      "question": "What organizations are targeted by Sandworm Team?",
+      "complexity": "1-hop"
+    },
+    {
+      "query_id": "q_09",
+      "category": "factual_direct",
+      "question": "What techniques are associated with Sandworm Team?",
+      "complexity": "1-hop"
+    },
+    {
+      "query_id": "q_10",
+      "category": "factual_direct",
+      "question": "What techniques does APT29 use for credential access and collection?",
+      "complexity": "1-hop"
+    },
+    {
+      "query_id": "q_11",
+      "category": "unanswerable_unknown_actor",
+      "question": "What malware is used by PhantomSpider99?",
+      "complexity": "unanswerable"
+    },
+    {
+      "query_id": "q_12",
+      "category": "unanswerable_undocumented_cve",
+      "question": "What products are affected by CVE-2099-99999?",
+      "complexity": "unanswerable"
+    },
+    {
+      "query_id": "q_13",
+      "category": "unanswerable_no_relationship",
+      "question": "Did Volt Typhoon deploy BlackEnergy malware?",
+      "complexity": "unanswerable"
+    },
+    {
+      "query_id": "q_14",
+      "category": "unanswerable_no_relationship",
+      "question": "Does Sandworm Team exploit CVE-2021-44228 in Apache Log4j?",
+      "complexity": "unanswerable"
+    },
+    {
+      "query_id": "q_15",
+      "category": "adversarial_false_premise",
+      "question": "How did APT29 use Olympic Destroyer to attack the Ukrainian power grid?",
+      "complexity": "unanswerable"
+    }
+  ]
+}

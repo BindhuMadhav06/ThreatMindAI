@@ -1,0 +1,225 @@
+{
+  "benchmark_name": "ThreatMind Ground Truth Evaluation Reference",
+  "version": "1.1.0",
+  "quarantine_notice": "QUARANTINED REFERENCE DATA: Must ONLY be accessed by the evaluation scoring harness after prediction generation. Never leak into retrieval or answering prompts.",
+  "ground_truth": {
+    "q_01": {
+      "must_abstain": false,
+      "gold_entities": ["APT29", "WellMess", "WellMail"],
+      "gold_triples": [
+        {"source": "APT29", "rel_type": "USES", "target": "WellMess"},
+        {"source": "APT29", "rel_type": "USES", "target": "WellMail"}
+      ],
+      "gold_paths": [
+        [{"source": "APT29", "rel_type": "USES", "target": "WellMess"}],
+        [{"source": "APT29", "rel_type": "USES", "target": "WellMail"}]
+      ],
+      "gold_evidence_quotes": [
+        "In their campaigns, APT29 deployed custom backdoor malware families known as WellMess and WellMail to exfiltrate intelligence and command compromised systems."
+      ],
+      "expected_behavior": "Return factual answer identifying WellMess and WellMail with citation to cisa_aa21_116a."
+    },
+    "q_02": {
+      "must_abstain": false,
+      "gold_entities": ["Sandworm Team", "BlackEnergy", "Industroyer", "Olympic Destroyer", "NotPetya"],
+      "gold_triples": [
+        {"source": "Sandworm Team", "rel_type": "USES", "target": "BlackEnergy"},
+        {"source": "Sandworm Team", "rel_type": "USES", "target": "Industroyer"},
+        {"source": "Sandworm Team", "rel_type": "USES", "target": "Olympic Destroyer"},
+        {"source": "Sandworm Team", "rel_type": "USES", "target": "NotPetya"}
+      ],
+      "gold_paths": [
+        [{"source": "Sandworm Team", "rel_type": "USES", "target": "BlackEnergy"}],
+        [{"source": "Sandworm Team", "rel_type": "USES", "target": "Industroyer"}],
+        [{"source": "Sandworm Team", "rel_type": "USES", "target": "Olympic Destroyer"}],
+        [{"source": "Sandworm Team", "rel_type": "USES", "target": "NotPetya"}]
+      ],
+      "gold_evidence_quotes": [
+        "In destructive intrusions against the Ukrainian power grid, Sandworm Team used BlackEnergy malware and Industroyer to manipulate electrical substation systems and force power outages.",
+        "Sandworm Team also developed and distributed the NotPetya ransomware to cause global operational paralysis across multinational shipping and logistics enterprises.",
+        "Sandworm Team deployed the destructive wiper malware Olympic Destroyer to disrupt the 2018 Winter Olympic Games."
+      ],
+      "expected_behavior": "Return factual answer identifying BlackEnergy, Industroyer, Olympic Destroyer, NotPetya with citations to cisa_aa22_110a and mitre_g0034_sandworm."
+    },
+    "q_03": {
+      "must_abstain": false,
+      "gold_entities": ["Apache Log4j", "CVE-2021-44228"],
+      "gold_triples": [
+        {"source": "CVE-2021-44228", "rel_type": "AFFECTS", "target": "Apache Log4j"}
+      ],
+      "gold_paths": [
+        [{"source": "CVE-2021-44228", "rel_type": "AFFECTS", "target": "Apache Log4j"}]
+      ],
+      "gold_evidence_quotes": [
+        "The primary vulnerability, designated as CVE-2021-44228, affects the Apache Log4j Java logging framework."
+      ],
+      "expected_behavior": "Identify CVE-2021-44228 as the primary vulnerability affecting Apache Log4j with citation to cisa_aa21_356a."
+    },
+    "q_04": {
+      "must_abstain": false,
+      "gold_entities": ["CVE-2023-46805", "Ivanti Connect Secure"],
+      "gold_triples": [
+        {"source": "CVE-2023-46805", "rel_type": "AFFECTS", "target": "Ivanti Connect Secure"}
+      ],
+      "gold_paths": [
+        [{"source": "CVE-2023-46805", "rel_type": "AFFECTS", "target": "Ivanti Connect Secure"}]
+      ],
+      "gold_evidence_quotes": [
+        "The first flaw, CVE-2023-46805, is an authentication bypass vulnerability affecting web components of Ivanti Connect Secure."
+      ],
+      "expected_behavior": "Identify Ivanti Connect Secure with citation to cisa_aa24_060b."
+    },
+    "q_05": {
+      "must_abstain": false,
+      "gold_entities": ["Volt Typhoon", "Valid Accounts"],
+      "gold_triples": [
+        {"source": "Volt Typhoon", "rel_type": "USES_TECHNIQUE", "target": "Valid Accounts"}
+      ],
+      "gold_paths": [
+        [{"source": "Volt Typhoon", "rel_type": "USES_TECHNIQUE", "target": "Valid Accounts"}]
+      ],
+      "gold_evidence_quotes": [
+        "The actor leverages Valid Accounts to maintain long-term persistent access and evade traditional endpoint security detection."
+      ],
+      "expected_behavior": "Identify Valid Accounts technique with citation to cisa_aa24_038a."
+    },
+    "q_06": {
+      "must_abstain": false,
+      "gold_entities": ["APT29", "CVE-2019-19781", "Citrix ADC", "CVE-2020-0688", "Microsoft Exchange Server"],
+      "gold_triples": [
+        {"source": "APT29", "rel_type": "EXPLOITS", "target": "CVE-2019-19781"},
+        {"source": "CVE-2019-19781", "rel_type": "AFFECTS", "target": "Citrix ADC"},
+        {"source": "APT29", "rel_type": "EXPLOITS", "target": "CVE-2020-0688"},
+        {"source": "CVE-2020-0688", "rel_type": "AFFECTS", "target": "Microsoft Exchange Server"}
+      ],
+      "gold_paths": [
+        [
+          {"source": "APT29", "rel_type": "EXPLOITS", "target": "CVE-2019-19781"},
+          {"source": "CVE-2019-19781", "rel_type": "AFFECTS", "target": "Citrix ADC"}
+        ],
+        [
+          {"source": "APT29", "rel_type": "EXPLOITS", "target": "CVE-2020-0688"},
+          {"source": "CVE-2020-0688", "rel_type": "AFFECTS", "target": "Microsoft Exchange Server"}
+        ]
+      ],
+      "gold_evidence_quotes": [
+        "The actors gained entry by exploiting external network vulnerabilities, notably CVE-2019-19781 in Citrix Application Delivery Controller and Gateway appliances, as well as CVE-2020-0688 in Microsoft Exchange Server."
+      ],
+      "expected_behavior": "Synthesize multi-hop exploit paths (APT29 -> CVE-2019-19781 -> Citrix ADC and APT29 -> CVE-2020-0688 -> Microsoft Exchange)."
+    },
+    "q_07": {
+      "must_abstain": false,
+      "gold_entities": ["APT29", "CVE-2019-19781", "Citrix ADC", "CVE-2020-0688", "Microsoft Exchange Server"],
+      "gold_triples": [
+        {"source": "APT29", "rel_type": "EXPLOITS", "target": "CVE-2019-19781"},
+        {"source": "CVE-2019-19781", "rel_type": "AFFECTS", "target": "Citrix ADC"},
+        {"source": "APT29", "rel_type": "EXPLOITS", "target": "CVE-2020-0688"},
+        {"source": "CVE-2020-0688", "rel_type": "AFFECTS", "target": "Microsoft Exchange Server"}
+      ],
+      "gold_paths": [
+        [
+          {"source": "APT29", "rel_type": "EXPLOITS", "target": "CVE-2019-19781"},
+          {"source": "CVE-2019-19781", "rel_type": "AFFECTS", "target": "Citrix ADC"}
+        ]
+      ],
+      "gold_evidence_quotes": [
+        "The actors gained entry by exploiting external network vulnerabilities, notably CVE-2019-19781 in Citrix Application Delivery Controller and Gateway appliances, as well as CVE-2020-0688 in Microsoft Exchange Server."
+      ],
+      "expected_behavior": "Synthesize multi-hop associations for APT29."
+    },
+    "q_08": {
+      "must_abstain": false,
+      "gold_entities": ["Sandworm Team", "Energy Sector"],
+      "gold_triples": [
+        {"source": "Sandworm Team", "rel_type": "TARGETS", "target": "Energy Sector"}
+      ],
+      "gold_paths": [
+        [{"source": "Sandworm Team", "rel_type": "TARGETS", "target": "Energy Sector"}]
+      ],
+      "gold_evidence_quotes": [
+        "In destructive intrusions against the Ukrainian power grid, Sandworm Team used BlackEnergy malware and Industroyer to manipulate electrical substation systems and force power outages."
+      ],
+      "expected_behavior": "Identify targeting of energy sector organizations (Ukrainian power grid) with citation to cisa_aa22_110a."
+    },
+    "q_09": {
+      "must_abstain": false,
+      "gold_entities": ["Sandworm Team", "Data Destruction", "Command and Scripting Interpreter", "Network Denial of Service"],
+      "gold_triples": [
+        {"source": "Sandworm Team", "rel_type": "USES_TECHNIQUE", "target": "Data Destruction"},
+        {"source": "Sandworm Team", "rel_type": "USES_TECHNIQUE", "target": "Command and Scripting Interpreter"},
+        {"source": "Sandworm Team", "rel_type": "USES_TECHNIQUE", "target": "Network Denial of Service"}
+      ],
+      "gold_paths": [
+        [{"source": "Sandworm Team", "rel_type": "USES_TECHNIQUE", "target": "Data Destruction"}],
+        [{"source": "Sandworm Team", "rel_type": "USES_TECHNIQUE", "target": "Command and Scripting Interpreter"}],
+        [{"source": "Sandworm Team", "rel_type": "USES_TECHNIQUE", "target": "Network Denial of Service"}]
+      ],
+      "gold_evidence_quotes": [
+        "In observed disruptive campaigns, Sandworm Team conducts Data Destruction by deploying custom wipers designed to overwrite master boot records, wipe disk partitions, and render operational computer systems permanently unrecoverable.",
+        "Sandworm Team uses Command and Scripting Interpreter components, including Unix shells and Windows script hosts, to stage malware execution and coordinate rapid malware propagation.",
+        "The group also performs Network Denial of Service attacks against target telecommunication providers and government portals to disrupt communication channels during kinetic operations."
+      ],
+      "expected_behavior": "Identify Data Destruction, Command and Scripting Interpreter, and Network Denial of Service techniques with citations to mitre_g0034_sandworm."
+    },
+    "q_10": {
+      "must_abstain": false,
+      "gold_entities": ["APT29", "Valid Accounts", "Archive Collected Data", "PowerShell"],
+      "gold_triples": [
+        {"source": "APT29", "rel_type": "USES_TECHNIQUE", "target": "Valid Accounts"},
+        {"source": "APT29", "rel_type": "USES_TECHNIQUE", "target": "Archive Collected Data"},
+        {"source": "APT29", "rel_type": "USES_TECHNIQUE", "target": "PowerShell"}
+      ],
+      "gold_paths": [
+        [{"source": "APT29", "rel_type": "USES_TECHNIQUE", "target": "Valid Accounts"}],
+        [{"source": "APT29", "rel_type": "USES_TECHNIQUE", "target": "Archive Collected Data"}],
+        [{"source": "APT29", "rel_type": "USES_TECHNIQUE", "target": "PowerShell"}]
+      ],
+      "gold_evidence_quotes": [
+        "To establish and maintain access to enterprise victim environments, APT29 uses Valid Accounts, obtaining legitimate user and administrative credentials to log into cloud and on-premises infrastructure undetected.",
+        "Before exfiltrating stolen intelligence, APT29 uses Archive Collected Data by compressing sensitive documents into password-protected ZIP and RAR archives to conceal data transfers from network inspection controls.",
+        "Following successful exploitation, APT29 uses PowerShell scripts to harvest local credentials and stage encrypted archives for remote exfiltration."
+      ],
+      "expected_behavior": "Identify Valid Accounts, Archive Collected Data, and PowerShell techniques."
+    },
+    "q_11": {
+      "must_abstain": true,
+      "gold_entities": [],
+      "gold_triples": [],
+      "gold_paths": [],
+      "gold_evidence_quotes": [],
+      "expected_behavior": "Abstain immediately: PhantomSpider99 does not exist in corpus or graph."
+    },
+    "q_12": {
+      "must_abstain": true,
+      "gold_entities": [],
+      "gold_triples": [],
+      "gold_paths": [],
+      "gold_evidence_quotes": [],
+      "expected_behavior": "Abstain immediately: CVE-2099-99999 is an unobserved vulnerability."
+    },
+    "q_13": {
+      "must_abstain": true,
+      "gold_entities": ["Volt Typhoon", "BlackEnergy"],
+      "gold_triples": [],
+      "gold_paths": [],
+      "gold_evidence_quotes": [],
+      "expected_behavior": "Abstain immediately: Both entities exist in separate documents, but no documented link connects Volt Typhoon to BlackEnergy."
+    },
+    "q_14": {
+      "must_abstain": true,
+      "gold_entities": ["Sandworm Team", "CVE-2021-44228", "Apache Log4j"],
+      "gold_triples": [],
+      "gold_paths": [],
+      "gold_evidence_quotes": [],
+      "expected_behavior": "Abstain immediately: No document associates Sandworm Team with CVE-2021-44228 or Log4j."
+    },
+    "q_15": {
+      "must_abstain": true,
+      "gold_entities": ["APT29", "Olympic Destroyer"],
+      "gold_triples": [],
+      "gold_paths": [],
+      "gold_evidence_quotes": [],
+      "expected_behavior": "Abstain immediately: Olympic Destroyer is documented only for Sandworm Team (in mitre_g0034_sandworm), not APT29; reject false premise."
+    }
+  }
+}

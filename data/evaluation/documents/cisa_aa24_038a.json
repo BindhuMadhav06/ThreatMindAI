@@ -1,0 +1,13 @@
+{
+  "source_id": "cisa_aa24_038a",
+  "title": "PRC State-Sponsored Actors Compromise and Maintain Persistent Access to U.S. Critical Infrastructure",
+  "canonical_title": "PRC State-Sponsored Actors Compromise and Maintain Persistent Access to U.S. Critical Infrastructure",
+  "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-038a",
+  "publisher": "Cybersecurity and Infrastructure Security Agency",
+  "published_date": "2024-02-07",
+  "last_revised_date": "2024-02-29",
+  "retrieval_date": "2026-10-10",
+  "license": "US Government Public Domain (17 U.S.C. 105)",
+  "is_synthetic": false,
+  "raw_text": "The Cybersecurity and Infrastructure Security Agency (CISA), NSA, and FBI assess that People's Republic of China (PRC) state-sponsored cyber group Volt Typhoon has maintained access to multiple United States critical infrastructure organizations. Volt Typhoon targets organizations across the energy, water, telecommunications, and transportation sectors. To gain initial access, Volt Typhoon exploits known security vulnerabilities in internet-facing network appliances, including Fortinet FortiOS appliances and Ivanti Connect Secure gateways. Once inside victim networks, Volt Typhoon uses built-in administrative tools and PowerShell commands to execute living-off-the-land activities without deploying distinct malware files. The actor leverages Valid Accounts to maintain long-term persistent access and evade traditional endpoint security detection."
+}

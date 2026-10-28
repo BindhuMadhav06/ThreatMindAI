@@ -1,0 +1,379 @@
+{
+  "total_entities": 30,
+  "entities": [
+    {
+      "id": "eval_prod_apache_log4j",
+      "label": "Product",
+      "name": "Apache Log4j",
+      "aliases": [
+        "Log4j"
+      ],
+      "source_id": "cisa_aa21_356a",
+      "mention_text": "Apache Log4j",
+      "start_char": 107,
+      "end_char": 119,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_vuln_cve_2021_44228",
+      "label": "Vulnerability",
+      "name": "CVE-2021-44228",
+      "aliases": [
+        "Log4Shell"
+      ],
+      "source_id": "cisa_aa21_356a",
+      "mention_text": "CVE-2021-44228",
+      "start_char": 179,
+      "end_char": 193,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_malware_cobaltstrike",
+      "label": "Malware",
+      "name": "Cobalt Strike",
+      "aliases": [
+        "Cobalt Strike Beacon"
+      ],
+      "source_id": "cisa_aa21_356a",
+      "mention_text": "Cobalt Strike",
+      "start_char": 502,
+      "end_char": 515,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_tech_powershell",
+      "label": "Technique",
+      "name": "PowerShell",
+      "aliases": [
+        "PowerShell scripts"
+      ],
+      "source_id": "cisa_aa21_356a",
+      "mention_text": "PowerShell",
+      "start_char": 613,
+      "end_char": 623,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_os_windows",
+      "label": "OperatingSystem",
+      "name": "Windows",
+      "aliases": [
+        "Windows systems"
+      ],
+      "source_id": "cisa_aa21_356a",
+      "mention_text": "Windows",
+      "start_char": 690,
+      "end_char": 697,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_actor_volt_typhoon",
+      "label": "ThreatActor",
+      "name": "Volt Typhoon",
+      "aliases": [
+        "PRC state-sponsored cyber group Volt Typhoon"
+      ],
+      "source_id": "cisa_aa24_038a",
+      "mention_text": "Volt Typhoon",
+      "start_char": 147,
+      "end_char": 159,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_org_critical_infrastructure",
+      "label": "Organization",
+      "name": "Critical Infrastructure Organizations",
+      "aliases": [
+        "critical infrastructure organizations"
+      ],
+      "source_id": "cisa_aa24_038a",
+      "mention_text": "critical infrastructure organizations",
+      "start_char": 208,
+      "end_char": 245,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_prod_fortinet_fortios",
+      "label": "Product",
+      "name": "Fortinet FortiOS",
+      "aliases": [
+        "Fortinet FortiOS appliances"
+      ],
+      "source_id": "cisa_aa24_038a",
+      "mention_text": "Fortinet FortiOS",
+      "start_char": 482,
+      "end_char": 498,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_prod_ivanti_connect_secure",
+      "label": "Product",
+      "name": "Ivanti Connect Secure",
+      "aliases": [
+        "Ivanti Connect Secure gateways"
+      ],
+      "source_id": "cisa_aa24_038a",
+      "mention_text": "Ivanti Connect Secure",
+      "start_char": 514,
+      "end_char": 535,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_tech_valid_accounts",
+      "label": "Technique",
+      "name": "Valid Accounts",
+      "aliases": [
+        "T1078"
+      ],
+      "source_id": "cisa_aa24_038a",
+      "mention_text": "Valid Accounts",
+      "start_char": 751,
+      "end_char": 765,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_actor_apt29",
+      "label": "ThreatActor",
+      "name": "APT29",
+      "aliases": [
+        "Cozy Bear",
+        "SVR"
+      ],
+      "source_id": "cisa_aa21_116a",
+      "mention_text": "APT29",
+      "start_char": 177,
+      "end_char": 182,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_org_government",
+      "label": "Organization",
+      "name": "Government Organizations",
+      "aliases": [
+        "government, diplomatic, think-tank, and healthcare organizations"
+      ],
+      "source_id": "cisa_aa21_116a",
+      "mention_text": "government, diplomatic, think-tank, and healthcare organizations",
+      "start_char": 211,
+      "end_char": 275,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_malware_wellmess",
+      "label": "Malware",
+      "name": "WellMess",
+      "aliases": [],
+      "source_id": "cisa_aa21_116a",
+      "mention_text": "WellMess",
+      "start_char": 363,
+      "end_char": 371,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_malware_wellmail",
+      "label": "Malware",
+      "name": "WellMail",
+      "aliases": [],
+      "source_id": "cisa_aa21_116a",
+      "mention_text": "WellMail",
+      "start_char": 376,
+      "end_char": 384,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_vuln_cve_2019_19781",
+      "label": "Vulnerability",
+      "name": "CVE-2019-19781",
+      "aliases": [],
+      "source_id": "cisa_aa21_116a",
+      "mention_text": "CVE-2019-19781",
+      "start_char": 525,
+      "end_char": 539,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_prod_citrix_adc",
+      "label": "Product",
+      "name": "Citrix ADC",
+      "aliases": [
+        "Citrix Application Delivery Controller"
+      ],
+      "source_id": "cisa_aa21_116a",
+      "mention_text": "Citrix Application Delivery Controller",
+      "start_char": 543,
+      "end_char": 581,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_vuln_cve_2020_0688",
+      "label": "Vulnerability",
+      "name": "CVE-2020-0688",
+      "aliases": [],
+      "source_id": "cisa_aa21_116a",
+      "mention_text": "CVE-2020-0688",
+      "start_char": 617,
+      "end_char": 630,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_prod_ms_exchange",
+      "label": "Product",
+      "name": "Microsoft Exchange Server",
+      "aliases": [
+        "Microsoft Exchange"
+      ],
+      "source_id": "cisa_aa21_116a",
+      "mention_text": "Microsoft Exchange Server",
+      "start_char": 634,
+      "end_char": 659,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_actor_sandworm",
+      "label": "ThreatActor",
+      "name": "Sandworm Team",
+      "aliases": [
+        "Unit 74455",
+        "GRU Unit 74455"
+      ],
+      "source_id": "cisa_aa22_110a",
+      "mention_text": "Sandworm Team",
+      "start_char": 258,
+      "end_char": 271,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_malware_blackenergy",
+      "label": "Malware",
+      "name": "BlackEnergy",
+      "aliases": [],
+      "source_id": "cisa_aa22_110a",
+      "mention_text": "BlackEnergy",
+      "start_char": 459,
+      "end_char": 470,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_malware_industroyer",
+      "label": "Malware",
+      "name": "Industroyer",
+      "aliases": [],
+      "source_id": "cisa_aa22_110a",
+      "mention_text": "Industroyer",
+      "start_char": 483,
+      "end_char": 494,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_malware_notpetya",
+      "label": "Malware",
+      "name": "NotPetya",
+      "aliases": [],
+      "source_id": "cisa_aa22_110a",
+      "mention_text": "NotPetya",
+      "start_char": 613,
+      "end_char": 621,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_org_energy_sector",
+      "label": "Organization",
+      "name": "Energy Sector",
+      "aliases": [
+        "Ukrainian power grid"
+      ],
+      "source_id": "cisa_aa22_110a",
+      "mention_text": "Ukrainian power grid",
+      "start_char": 418,
+      "end_char": 438,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_vuln_cve_2023_46805",
+      "label": "Vulnerability",
+      "name": "CVE-2023-46805",
+      "aliases": [],
+      "source_id": "cisa_aa24_060b",
+      "mention_text": "CVE-2023-46805",
+      "start_char": 198,
+      "end_char": 212,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_vuln_cve_2024_21887",
+      "label": "Vulnerability",
+      "name": "CVE-2024-21887",
+      "aliases": [],
+      "source_id": "cisa_aa24_060b",
+      "mention_text": "CVE-2024-21887",
+      "start_char": 324,
+      "end_char": 338,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_tech_archive_collected_data",
+      "label": "Technique",
+      "name": "Archive Collected Data",
+      "aliases": [
+        "T1560"
+      ],
+      "source_id": "mitre_g0016_apt29",
+      "mention_text": "Archive Collected Data",
+      "start_char": 515,
+      "end_char": 537,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_malware_olympic_destroyer",
+      "label": "Malware",
+      "name": "Olympic Destroyer",
+      "aliases": [
+        "S0365"
+      ],
+      "source_id": "mitre_g0034_sandworm",
+      "mention_text": "Olympic Destroyer",
+      "start_char": 440,
+      "end_char": 457,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_tech_data_destruction",
+      "label": "Technique",
+      "name": "Data Destruction",
+      "aliases": [
+        "T1485"
+      ],
+      "source_id": "mitre_g0034_sandworm",
+      "mention_text": "Data Destruction",
+      "start_char": 211,
+      "end_char": 227,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_tech_cmd_interpreter",
+      "label": "Technique",
+      "name": "Command and Scripting Interpreter",
+      "aliases": [
+        "T1059"
+      ],
+      "source_id": "mitre_g0034_sandworm",
+      "mention_text": "Command and Scripting Interpreter",
+      "start_char": 519,
+      "end_char": 552,
+      "is_synthetic": false
+    },
+    {
+      "id": "eval_tech_network_dos",
+      "label": "Technique",
+      "name": "Network Denial of Service",
+      "aliases": [
+        "T1498"
+      ],
+      "source_id": "mitre_g0034_sandworm",
+      "mention_text": "Network Denial of Service",
+      "start_char": 706,
+      "end_char": 731,
+      "is_synthetic": false
+    }
+  ]
+}

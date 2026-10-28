@@ -1,0 +1,13 @@
+{
+  "source_id": "mitre_g0034_sandworm",
+  "title": "MITRE ATT&CK Group G0034: Sandworm Team",
+  "canonical_title": "Sandworm Team, Enterprise ATT&CK Group G0034",
+  "url": "https://attack.mitre.org/groups/G0034/",
+  "publisher": "MITRE Corporation",
+  "published_date": "2024-03-25",
+  "last_revised_date": "2024-03-25",
+  "retrieval_date": "2026-10-10",
+  "license": "MITRE ATT&CK Terms of Use",
+  "is_synthetic": false,
+  "raw_text": "Sandworm Team is a destructive Russian state-sponsored cyber espionage and sabotage group associated with Main Intelligence Directorate (GRU) Unit 74455. In observed disruptive campaigns, Sandworm Team conducts Data Destruction by deploying custom wipers designed to overwrite master boot records, wipe disk partitions, and render operational computer systems permanently unrecoverable. Sandworm Team deployed the destructive wiper malware Olympic Destroyer to disrupt the 2018 Winter Olympic Games. Sandworm Team uses Command and Scripting Interpreter components, including Unix shells and Windows script hosts, to stage malware execution and coordinate rapid malware propagation. The group also performs Network Denial of Service attacks against target telecommunication providers and government portals to disrupt communication channels during kinetic operations."
+}

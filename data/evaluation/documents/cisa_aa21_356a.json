@@ -1,0 +1,13 @@
+{
+  "source_id": "cisa_aa21_356a",
+  "title": "Mitigating Log4Shell and Other Log4j-Related Vulnerabilities",
+  "canonical_title": "Mitigating Log4Shell and Other Log4j-Related Vulnerabilities",
+  "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa21-356a",
+  "publisher": "Cybersecurity and Infrastructure Security Agency",
+  "published_date": "2021-12-22",
+  "last_revised_date": "2021-12-28",
+  "retrieval_date": "2026-10-10",
+  "license": "US Government Public Domain (17 U.S.C. 105)",
+  "is_synthetic": false,
+  "raw_text": "CISA and its partners are responding to active, widespread exploitation of critical vulnerabilities in the Apache Log4j software library. The primary vulnerability, designated as CVE-2021-44228, affects the Apache Log4j Java logging framework. Malicious cyber actors are actively scanning networks and executing remote code by submitting crafted requests to vulnerable applications. Upon successful exploitation of CVE-2021-44228 in Apache Log4j, adversaries deploy post-exploitation tooling including Cobalt Strike Beacon payloads to establish command and control. Furthermore, threat actors frequently leverage PowerShell scripts to execute secondary payloads and evade host detection on Windows systems. Organizations running Apache Log4j must immediately apply vendor updates and review network logs for anomalous outbound connections."
+}

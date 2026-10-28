@@ -1,0 +1,30 @@
+# Python virtual environment & cache
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Node & Frontend build
+node_modules/
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+.npm/
+
+# Local databases & servers
+neo4j-server/
+*.log
+
+# Environment & secrets
+.env
+.env.*
+*.local
+
+# System & OS files
+.DS_Store
+Thumbs.db

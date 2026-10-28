@@ -1,0 +1,13 @@
+{
+  "source_id": "cisa_aa22_110a",
+  "title": "Russian State-Sponsored and Criminal Cyber Threats to Critical Infrastructure",
+  "canonical_title": "Russian State-Sponsored and Criminal Cyber Threats to Critical Infrastructure",
+  "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa22-110a",
+  "publisher": "Cybersecurity and Infrastructure Security Agency",
+  "published_date": "2022-04-20",
+  "last_revised_date": "2022-05-09",
+  "retrieval_date": "2026-10-10",
+  "license": "US Government Public Domain (17 U.S.C. 105)",
+  "is_synthetic": false,
+  "raw_text": "CISA, the FBI, and NSA released joint cybersecurity advisory AA22-110A regarding disruptive cyber operations attributed to Russian state-sponsored actors, specifically Russian General Staff Main Intelligence Directorate (GRU) Unit 74455, commonly tracked as Sandworm Team. Sandworm Team has conducted destructive attacks targeting critical infrastructure organizations worldwide. In destructive intrusions against the Ukrainian power grid, Sandworm Team used BlackEnergy malware and Industroyer to manipulate electrical substation systems and force power outages. Sandworm Team also developed and distributed the NotPetya ransomware to cause global operational paralysis across multinational shipping and logistics enterprises."
+}
