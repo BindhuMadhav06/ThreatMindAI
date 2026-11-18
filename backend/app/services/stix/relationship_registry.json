@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ThreatMind STIX 2.1 Machine-Readable Relationship Registry",
+  "version": "2.1.4",
+  "supported_relationships": {
+    "attributed-to": [
+      ["campaign", "intrusion-set"],
+      ["campaign", "threat-actor"],
+      ["intrusion-set", "threat-actor"],
+      ["threat-actor", "identity"]
+    ],
+    "exploits": [
+      ["malware", "vulnerability"]
+    ],
+    "delivers": [
+      ["attack-pattern", "malware"],
+      ["infrastructure", "malware"],
+      ["tool", "malware"]
+    ],
+    "uses": [
+      ["attack-pattern", "malware"],
+      ["attack-pattern", "tool"],
+      ["campaign", "attack-pattern"],
+      ["campaign", "infrastructure"],
+      ["campaign", "malware"],
+      ["campaign", "tool"],
+      ["infrastructure", "infrastructure"],
+      ["intrusion-set", "attack-pattern"],
+      ["intrusion-set", "infrastructure"],
+      ["intrusion-set", "malware"],
+      ["intrusion-set", "tool"],
+      ["malware", "attack-pattern"],
+      ["malware", "infrastructure"],
+      ["malware", "malware"],
+      ["malware", "tool"],
+      ["threat-actor", "attack-pattern"],
+      ["threat-actor", "infrastructure"],
+      ["threat-actor", "malware"],
+      ["threat-actor", "tool"],
+      ["tool", "infrastructure"]
+    ],
+    "targets": [
+      ["attack-pattern", "identity"],
+      ["attack-pattern", "location"],
+      ["attack-pattern", "vulnerability"],
+      ["campaign", "identity"],
+      ["campaign", "location"],
+      ["campaign", "vulnerability"],
+      ["intrusion-set", "identity"],
+      ["intrusion-set", "location"],
+      ["intrusion-set", "vulnerability"],
+      ["threat-actor", "identity"],
+      ["threat-actor", "location"],
+      ["threat-actor", "vulnerability"],
+      ["malware", "identity"],
+      ["malware", "infrastructure"],
+      ["malware", "location"],
+      ["malware", "vulnerability"],
+      ["tool", "identity"],
+      ["tool", "infrastructure"],
+      ["tool", "location"],
+      ["tool", "vulnerability"]
+    ],
+    "mitigates": [
+      ["course-of-action", "attack-pattern"],
+      ["course-of-action", "indicator"],
+      ["course-of-action", "malware"],
+      ["course-of-action", "tool"],
+      ["course-of-action", "vulnerability"]
+    ],
+    "investigates": [
+      ["course-of-action", "indicator"]
+    ],
+    "remediates": [
+      ["course-of-action", "malware"],
+      ["course-of-action", "vulnerability"]
+    ],
+    "originates-from": [
+      ["campaign", "location"]
+    ],
+    "located-at": [
+      ["identity", "location"],
+      ["infrastructure", "location"],
+      ["threat-actor", "location"]
+    ],
+    "indicates": [
+      ["indicator", "attack-pattern"],
+      ["indicator", "campaign"],
+      ["indicator", "infrastructure"],
+      ["indicator", "intrusion-set"],
+      ["indicator", "malware"],
+      ["indicator", "threat-actor"],
+      ["indicator", "tool"]
+    ]
+  },
+  "standard_unsupported_tuples": [
+    ["malware", "originates-from", "location"],
+    ["threat-actor", "originates-from", "location"],
+    ["infrastructure", "hosts", "malware"],
+    ["threat-actor", "owns", "infrastructure"],
+    ["threat-actor", "controls", "infrastructure"],
+    ["threat-actor", "compromises", "infrastructure"],
+    ["malware", "drops", "malware"],
+    ["malware", "authored-by", "threat-actor"]
+  ],
+  "registered_custom_relationships": [
+    ["threat-actor", "financially-supports", "threat-actor"],
+    ["infrastructure", "operates-proxy-for", "infrastructure"]
+  ]
+}

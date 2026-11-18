@@ -1,0 +1,9 @@
+# Ensure LF line endings for consistent cryptographic hashing across platforms
+* text=auto eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
