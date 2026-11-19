@@ -794,3 +794,366 @@ def test_first_tlp_extension_data_validation():
             strict_restriction=True,
             sharing_scope="organization_and_clients",
         )
+
+
+# =============================================================================
+# Additional Verification Suites: AC-1 Location, Security Edge Cases,
+# Digest Refresh, Revocation Idempotency, and Transactional Rollbacks
+# =============================================================================
+
+def test_ac1_stix_location_cross_field_validation():
+    """AC-1: Validates Location coordinate cross-field dependencies, bounds, and precision rules."""
+    # Valid complete coordinate pair
+    loc_valid = StixLocation(
+        id="location--11111111-1111-1111-1111-111111111111",
+        created=NOW,
+        modified=NOW,
+        name="Geneva Headquarters",
+        latitude=46.2044,
+        longitude=6.1432,
+        precision=10.0,
+    )
+    assert loc_valid.latitude == 46.2044
+    assert loc_valid.longitude == 6.1432
+
+    # Valid location with region only (no coordinates)
+    loc_region = StixLocation(
+        id="location--22222222-2222-2222-2222-222222222222",
+        created=NOW,
+        modified=NOW,
+        region="western-europe",
+        country="CH",
+    )
+    assert loc_region.country == "CH"
+
+    # Missing longitude when latitude is present
+    with pytest.raises(ValidationError, match="Coordinates must be complete"):
+        StixLocation(
+            id="location--33333333-3333-3333-3333-333333333333",
+            created=NOW,
+            modified=NOW,
+            latitude=46.2044,
+        )
+
+    # Missing latitude when longitude is present
+    with pytest.raises(ValidationError, match="Coordinates must be complete"):
+        StixLocation(
+            id="location--44444444-4444-4444-4444-444444444444",
+            created=NOW,
+            modified=NOW,
+            longitude=6.1432,
+        )
+
+    # Latitude out of range (> 90)
+    with pytest.raises(ValidationError, match="Latitude must be between -90.0 and 90.0"):
+        StixLocation(
+            id="location--55555555-5555-5555-5555-555555555555",
+            created=NOW,
+            modified=NOW,
+            latitude=95.0,
+            longitude=6.1432,
+        )
+
+    # Longitude out of range (< -180)
+    with pytest.raises(ValidationError, match="Longitude must be between -180.0 and 180.0"):
+        StixLocation(
+            id="location--66666666-6666-6666-6666-666666666666",
+            created=NOW,
+            modified=NOW,
+            latitude=46.2044,
+            longitude=-185.0,
+        )
+
+    # Negative precision
+    with pytest.raises(ValidationError, match="Precision must be greater than or equal to 0"):
+        StixLocation(
+            id="location--77777777-7777-7777-7777-777777777777",
+            created=NOW,
+            modified=NOW,
+            latitude=46.2044,
+            longitude=6.1432,
+            precision=-5.0,
+        )
+
+    # Precision present without coordinates
+    with pytest.raises(ValidationError, match="Precision cannot be specified without coordinates"):
+        StixLocation(
+            id="location--88888888-8888-8888-8888-888888888888",
+            created=NOW,
+            modified=NOW,
+            country="CH",
+            precision=10.0,
+        )
+
+    # Completely empty location
+    with pytest.raises(ValidationError, match="Location object must not be empty"):
+        StixLocation(
+            id="location--99999999-9999-9999-9999-999999999999",
+            created=NOW,
+            modified=NOW,
+        )
+
+
+def test_ac7a_marking_validation_security_edge_case():
+    """AC-7A / Security: Bundle with rejected marking definition must NOT satisfy dependent SDO markings."""
+    service = StixIngestionService()
+    bad_marking_id = "marking-definition--99999999-9999-9999-9999-999999999999"
+    dep_actor_id = "threat-actor--99999999-9999-9999-9999-999999999991"
+
+    bundle = {
+        "type": "bundle",
+        "id": "bundle--00000000-0000-0000-0000-000000000001",
+        "objects": [
+            # Invalid marking definition (violates schema: missing created, etc.)
+            {
+                "type": "marking-definition",
+                "spec_version": "2.1",
+                "id": bad_marking_id,
+                "name": "Invalid Marking Def",
+                # missing required created property
+            },
+            # Dependent SDO referencing the invalid marking definition
+            {
+                "type": "threat-actor",
+                "spec_version": "2.1",
+                "id": dep_actor_id,
+                "created": "2026-11-18T12:00:00.000Z",
+                "modified": "2026-11-18T12:00:00.000Z",
+                "name": "Dependent Actor",
+                "object_marking_refs": [bad_marking_id],
+            },
+        ],
+    }
+
+    result = service.ingest_bundle(bundle)
+    assert result["nodes_created"] == 0
+    # Marking was rejected in rejected_and_isolated
+    assert len(result["rejection_ledger"]["rejected_and_isolated"]) == 1
+    # Dependent SDO was rejected with unresolved_marking_rejected because marking was not accepted
+    assert len(result["rejection_ledger"]["unresolved_marking_rejected"]) == 1
+    assert result["rejection_ledger"]["unresolved_marking_rejected"][0]["id"] == dep_actor_id
+
+
+def test_ac9_version_update_refreshes_digest():
+    """AC-9: Updating an entity with newer modified timestamp refreshes its canonical digest."""
+    service = StixIngestionService()
+    actor_id = "threat-actor--99999999-9999-9999-9999-999999999992"
+
+    v1_bundle = {
+        "type": "bundle",
+        "id": "bundle--00000000-0000-0000-0000-000000000002",
+        "objects": [
+            {
+                "type": "threat-actor",
+                "spec_version": "2.1",
+                "id": actor_id,
+                "created": "2026-11-18T10:00:00.000Z",
+                "modified": "2026-11-18T10:00:00.000Z",
+                "name": "Actor V1",
+            }
+        ],
+    }
+    r1 = service.ingest_bundle(v1_bundle)
+    assert r1["nodes_created"] == 1
+    digest_v1 = service.mapper.entities_by_stix_id[actor_id]["canonical_digest"]
+
+    # Ingest V2 with newer modified and changed name
+    v2_bundle = {
+        "type": "bundle",
+        "id": "bundle--00000000-0000-0000-0000-000000000003",
+        "objects": [
+            {
+                "type": "threat-actor",
+                "spec_version": "2.1",
+                "id": actor_id,
+                "created": "2026-11-18T10:00:00.000Z",
+                "modified": "2026-11-18T14:00:00.000Z",
+                "name": "Actor V2 Updated",
+            }
+        ],
+    }
+    r2 = service.ingest_bundle(v2_bundle)
+    assert r2["nodes_updated"] == 1
+    digest_v2 = service.mapper.entities_by_stix_id[actor_id]["canonical_digest"]
+    assert digest_v2 != digest_v1
+
+    # Re-importing V2 must be an idempotent merge (same modified and same refreshed digest)
+    r3 = service.ingest_bundle(v2_bundle)
+    assert r3["nodes_merged"] == 1
+    assert len(service.mapper.ambiguous_entity_conflicts) == 0
+
+
+def test_ac9_revoked_object_reimport_idempotent_vs_update_rejected():
+    """AC-9: Re-import of identical revoked object is merged; subsequent update is rejected."""
+    service = StixIngestionService()
+    actor_id = "threat-actor--99999999-9999-9999-9999-999999999993"
+
+    revoked_bundle = {
+        "type": "bundle",
+        "id": "bundle--00000000-0000-0000-0000-000000000004",
+        "objects": [
+            {
+                "type": "threat-actor",
+                "spec_version": "2.1",
+                "id": actor_id,
+                "created": "2026-11-18T10:00:00.000Z",
+                "modified": "2026-11-18T12:00:00.000Z",
+                "name": "Revoked Actor",
+                "revoked": True,
+            }
+        ],
+    }
+    r1 = service.ingest_bundle(revoked_bundle)
+    assert r1["nodes_created"] == 1
+    assert actor_id in service.mapper.revoked_stix_ids
+
+    # Re-importing the identical revoked object is an idempotent merge
+    r2 = service.ingest_bundle(revoked_bundle)
+    assert r2["nodes_merged"] == 1
+    assert len(r2["rejection_ledger"]["revoked_object_update_rejected"]) == 0
+
+    # Attempting to update the revoked object with modified timestamp or altered property
+    update_bundle = {
+        "type": "bundle",
+        "id": "bundle--00000000-0000-0000-0000-000000000005",
+        "objects": [
+            {
+                "type": "threat-actor",
+                "spec_version": "2.1",
+                "id": actor_id,
+                "created": "2026-11-18T10:00:00.000Z",
+                "modified": "2026-11-18T16:00:00.000Z",
+                "name": "Revoked Actor Attempted Update",
+                "revoked": True,
+            }
+        ],
+    }
+    r3 = service.ingest_bundle(update_bundle)
+    assert r3["nodes_created"] == 0
+    assert r3["nodes_updated"] == 0
+    assert len(r3["rejection_ledger"]["revoked_object_update_rejected"]) == 1
+
+
+def test_ac10_relationship_deduplication():
+    """AC-10: Repeated import of identical SRO increments relationships_merged without duplicating edges."""
+    service = StixIngestionService()
+    actor_id = "threat-actor--99999999-9999-9999-9999-999999999994"
+    malware_id = "malware--99999999-9999-9999-9999-999999999995"
+    rel_id = "relationship--99999999-9999-9999-9999-999999999996"
+
+    bundle = {
+        "type": "bundle",
+        "id": "bundle--00000000-0000-0000-0000-000000000006",
+        "objects": [
+            {
+                "type": "threat-actor",
+                "spec_version": "2.1",
+                "id": actor_id,
+                "created": "2026-11-18T12:00:00.000Z",
+                "modified": "2026-11-18T12:00:00.000Z",
+                "name": "Dedup Actor",
+            },
+            {
+                "type": "malware",
+                "spec_version": "2.1",
+                "id": malware_id,
+                "created": "2026-11-18T12:00:00.000Z",
+                "modified": "2026-11-18T12:00:00.000Z",
+                "name": "Dedup Malware",
+                "is_family": False,
+            },
+            {
+                "type": "relationship",
+                "spec_version": "2.1",
+                "id": rel_id,
+                "created": "2026-11-18T12:00:00.000Z",
+                "modified": "2026-11-18T12:00:00.000Z",
+                "relationship_type": "uses",
+                "source_ref": actor_id,
+                "target_ref": malware_id,
+            },
+        ],
+    }
+
+    # First import: creates 2 nodes and 1 relationship
+    r1 = service.ingest_bundle(bundle)
+    assert r1["nodes_created"] == 2
+    assert r1["relationships_created"] == 1
+    assert len(service.stored_relationships) == 1
+
+    # Second import: merges 2 nodes and 1 relationship, 0 duplicates created
+    r2 = service.ingest_bundle(bundle)
+    assert r2["nodes_merged"] == 2
+    assert r2["relationships_merged"] == 1
+    assert r2["relationships_created"] == 0
+    assert len(service.stored_relationships) == 1
+
+
+def test_ac12_transaction_rollback_guarantee():
+    """AC-12: Simulated database persistence failure triggers complete in-memory rollback."""
+    from unittest.mock import MagicMock
+    from app.services.stix.stix_graph_service import StixGraphService
+
+    # Mock GraphService to simulate a database constraint failure on persist
+    mock_graph_service = MagicMock(spec=StixGraphService)
+    mock_graph_service.is_connected.return_value = True
+    mock_graph_service.persist_bundle_transaction.side_effect = RuntimeError("Simulated Neo4j constraint violation")
+
+    service = StixIngestionService(graph_service=mock_graph_service)
+
+    bundle = {
+        "type": "bundle",
+        "id": "bundle--00000000-0000-0000-0000-000000000007",
+        "objects": [
+            {
+                "type": "threat-actor",
+                "spec_version": "2.1",
+                "id": "threat-actor--99999999-9999-9999-9999-999999999997",
+                "created": "2026-11-18T12:00:00.000Z",
+                "modified": "2026-11-18T12:00:00.000Z",
+                "name": "Actor To Rollback",
+            }
+        ],
+    }
+
+    # Expect RuntimeError from transaction rollback
+    with pytest.raises(RuntimeError, match="Database transaction failed; full rollback executed"):
+        service.ingest_bundle(bundle, dry_run=False)
+
+    # In-memory mapper must be completely clean (rolled back)
+    assert len(service.mapper.entities_by_stix_id) == 0
+    assert len(service.stored_relationships) == 0
+
+
+def test_ac11_live_neo4j_dry_run_state_equality():
+    """AC-11: Confirms that live Neo4j graph snapshot is identical before and after dry_run=True."""
+    from app.services.stix.stix_graph_service import StixGraphService
+    graph_svc = StixGraphService()
+    if not graph_svc.is_connected():
+        pytest.skip("Neo4j is not connected")
+
+    service = StixIngestionService(graph_service=graph_svc)
+    snapshot_before = graph_svc.get_graph_snapshot()
+
+    bundle = {
+        "type": "bundle",
+        "id": "bundle--00000000-0000-0000-0000-000000000008",
+        "objects": [
+            {
+                "type": "threat-actor",
+                "spec_version": "2.1",
+                "id": "threat-actor--99999999-9999-9999-9999-999999999998",
+                "created": "2026-11-18T12:00:00.000Z",
+                "modified": "2026-11-18T12:00:00.000Z",
+                "name": "Live Dry Run Actor",
+            }
+        ],
+    }
+
+    res = service.ingest_bundle(bundle, dry_run=True)
+    assert res["dry_run"] is True
+    assert res["nodes_created"] == 1
+
+    snapshot_after = graph_svc.get_graph_snapshot()
+    assert snapshot_before == snapshot_after
+

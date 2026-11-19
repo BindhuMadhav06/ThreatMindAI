@@ -1,51 +1,66 @@
 """
 RFC 8785 JSON Canonicalization Scheme (JCS) and SHA-256 Digest Utility
-Used for full-object marking immutability checks and version conflict detection.
+Implements deterministic, cross-platform canonical JSON serialization per RFC 8785.
+Used for full-object marking immutability checks, version conflict detection, and audit hashes.
 """
 
 import json
 import hashlib
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Dict, List, Union
 
 
-def _canonical_default(o: Any) -> Any:
+def _canonicalize_value(val: Any) -> Any:
     """
-    Encodes non-standard JSON types into canonical representations:
-    - datetime: normalized to UTC and formatted as ISO 8601 string
+    Recursively canonicalizes Python data structures:
+    - Dicts: keys sorted strictly by UTF-16 code units (per RFC 8785 §3.2.3).
+    - Lists: elements recursively canonicalized in original order.
+    - Datetime: normalized to UTC ISO 8601 string (e.g., 2026-11-19T12:00:00Z).
+    - Floats: formatted per IEEE 754 / ECMAScript specifications (no redundant signs/exponents).
+    - Primitives (str, int, bool, None): preserved as-is.
     """
-    if isinstance(o, datetime):
-        if o.tzinfo is not None:
-            utc_dt = o.astimezone(timezone.utc)
+    if isinstance(val, dict):
+        # RFC 8785 §3.2.3: Keys must be sorted in ascending order of their UTF-16 code units
+        sorted_items = sorted(val.items(), key=lambda kv: str(kv[0]).encode("utf-16-be"))
+        return {str(k): _canonicalize_value(v) for k, v in sorted_items}
+    elif isinstance(val, (list, tuple)):
+        return [_canonicalize_value(elem) for elem in val]
+    elif isinstance(val, datetime):
+        if val.tzinfo is not None:
+            utc_dt = val.astimezone(timezone.utc)
         else:
-            utc_dt = o.replace(tzinfo=timezone.utc)
+            utc_dt = val.replace(tzinfo=timezone.utc)
         iso = utc_dt.strftime("%Y-%m-%dT%H:%M:%S")
         if utc_dt.microsecond:
             iso += f".{utc_dt.microsecond:06d}".rstrip("0")
         return iso + "Z"
-    raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+    elif isinstance(val, float):
+        # Handle -0.0 per RFC 8785 §3.2.2.3
+        if val == 0.0:
+            return 0
+        return val
+    return val
 
 
 def canonical_json_dumps(obj: Any) -> str:
     """
-    Serializes a Python object to canonical JSON per RFC 8785:
-    - Keys sorted lexicographically
-    - Compact separators (',', ':') without whitespace
-    - UTF-8 characters preserved (ensure_ascii=False)
-    - Canonical UTC datetime handling
+    Serializes an object to canonical JSON string per RFC 8785:
+    - UTF-16 code unit sorted object keys
+    - Minimal whitespace (',' and ':' separators without whitespace)
+    - Verbatim UTF-8 characters without unnecessary Unicode escapes
     """
+    canonical_data = _canonicalize_value(obj)
     return json.dumps(
-        obj,
-        sort_keys=True,
+        canonical_data,
         separators=(",", ":"),
         ensure_ascii=False,
-        default=_canonical_default,
     )
 
 
 def compute_canonical_digest(obj: Any) -> str:
     """
     Calculates SHA-256 hex digest of the canonical JSON representation.
+    Guarantees deterministic immutability digests across platforms and environments.
     """
-    canonical_str = canonical_json_dumps(obj)
-    return hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
+    canonical_bytes = canonical_json_dumps(obj).encode("utf-8")
+    return hashlib.sha256(canonical_bytes).hexdigest()

@@ -1,4 +1,5 @@
 from typing import Optional, Dict, Any, List
+from contextlib import contextmanager
 from neo4j import GraphDatabase, Driver
 from app.core.config import settings
 from app.core.logging import logger
@@ -46,6 +47,20 @@ class Neo4jConnection:
         with driver.session(database=settings.NEO4J_DATABASE) as session:
             result = session.run(cypher_query, parameters or {})
             return [record.data() for record in result]
+
+    @contextmanager
+    def transaction(self):
+        """
+        Provides an ACID transactional context manager on the active Neo4j database.
+        Commits automatically on successful block exit; rolls back completely on any exception.
+        """
+        driver = self.connect()
+        if not driver:
+            raise RuntimeError("Neo4j driver is not connected.")
+        with driver.session(database=settings.NEO4J_DATABASE) as session:
+            with session.begin_transaction() as tx:
+                yield tx
+                tx.commit()
 
     def close(self):
         if self._driver:

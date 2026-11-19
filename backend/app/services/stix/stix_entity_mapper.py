@@ -251,18 +251,24 @@ class StixEntityMapper:
         """
         stix_id = sdo.id
 
-        # Permanent Revocation Invariant (§3.2)
-        if stix_id in self.revoked_stix_ids:
-            return "revoked_object_update_rejected", {
-                "stix_id": stix_id,
-                "reason": "Object is permanently revoked; no subsequent updates permitted.",
-            }
-
         model_payload = sdo.model_dump(mode="python", exclude_none=True)
         graph_entity = self.map_sdo_to_graph_properties(sdo)
         graph_entity["raw_payload"] = model_payload
         incoming_digest = compute_canonical_digest(model_payload)
         graph_entity["canonical_digest"] = incoming_digest
+
+        # Permanent Revocation Invariant (§3.2)
+        if stix_id in self.revoked_stix_ids:
+            # Check if this is an idempotent re-import of the identical revoked object
+            if stix_id in self.entities_by_stix_id:
+                existing_entity = self.entities_by_stix_id[stix_id]
+                existing_digest = existing_entity.get("canonical_digest") or compute_canonical_digest(existing_entity.get("raw_payload", {}))
+                if incoming_digest == existing_digest:
+                    return "merged", None
+            return "revoked_object_update_rejected", {
+                "stix_id": stix_id,
+                "reason": "Object is permanently revoked; no subsequent updates permitted.",
+            }
 
         # If incoming object is marked revoked, record it for permanent revocation
         if sdo.revoked is True:
@@ -302,7 +308,8 @@ class StixEntityMapper:
                 })
                 # Update entity properties
                 existing_entity["properties"].update(graph_entity["properties"])
-                existing_entity["raw_payload"] = raw_obj
+                existing_entity["raw_payload"] = model_payload
+                existing_entity["canonical_digest"] = incoming_digest
                 return "updated", None
 
             # Case C: Older modified timestamp -> Archive historical observation
@@ -311,7 +318,7 @@ class StixEntityMapper:
                     existing_entity["stix_version_history"] = []
                 existing_entity["stix_version_history"].append({
                     "modified": sdo.modified.isoformat(),
-                    "payload": raw_obj,
+                    "payload": model_payload,
                 })
                 return "archived_historical", None
 

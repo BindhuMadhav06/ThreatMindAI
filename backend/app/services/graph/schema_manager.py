@@ -2,7 +2,7 @@ from typing import Dict, List, Any
 from app.services.graph.connection import neo4j_conn
 from app.core.logging import logger
 
-# 13 Primary Node Labels
+# 13 Primary Node Labels (Phase 11 Core ThreatMind Schema)
 PRIMARY_NODE_LABELS = [
     "ThreatActor",
     "Malware",
@@ -16,10 +16,34 @@ PRIMARY_NODE_LABELS = [
     "Product",
     "Organization",
     "Indicator",
-    "Source"
+    "Source",
 ]
 
-# Supported Relationship Vocabulary
+# Additional STIX 2.1 Ontological Node Labels (Phase 12A)
+STIX_NODE_LABELS = [
+    "ThreatActor",
+    "IntrusionSet",
+    "Malware",
+    "Tool",
+    "Vulnerability",
+    "Technique",
+    "Tactic",
+    "Campaign",
+    "Software",
+    "OperatingSystem",
+    "Product",
+    "Organization",
+    "Identity",
+    "Indicator",
+    "Infrastructure",
+    "Location",
+    "Source",
+    "Mitigation",
+    "MarkingDefinition",
+    "ExtensionDefinition",
+]
+
+# Supported Relationship Vocabulary (Phase 11 Core)
 SUPPORTED_RELATIONSHIPS = [
     "USES",
     "USES_TECHNIQUE",
@@ -29,7 +53,30 @@ SUPPORTED_RELATIONSHIPS = [
     "PART_OF",
     "AFFECTS",
     "ASSOCIATED_WITH",
-    "SUPPORTED_BY"
+    "SUPPORTED_BY",
+]
+
+# Additional STIX 2.1 Graph Relationships (Phase 12A)
+STIX_SUPPORTED_RELATIONSHIPS = [
+    "USES",
+    "USES_TECHNIQUE",
+    "EXPLOITS",
+    "TARGETS",
+    "CONDUCTS",
+    "PART_OF",
+    "AFFECTS",
+    "ASSOCIATED_WITH",
+    "SUPPORTED_BY",
+    "ATTRIBUTED_TO",
+    "DELIVERS",
+    "MITIGATES",
+    "INVESTIGATES",
+    "REMEDIATES",
+    "ORIGINATES_FROM",
+    "LOCATED_AT",
+    "INDICATES",
+    "WAS_CREATED_BY",
+    "APPLIES_MARKING",
 ]
 
 class SchemaManager:

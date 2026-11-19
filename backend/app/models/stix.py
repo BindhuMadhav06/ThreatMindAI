@@ -278,6 +278,46 @@ class StixLocation(StixCommonSdoMetadata):
     street_address: Optional[str] = None
     postal_code: Optional[str] = None
 
+    @model_validator(mode="after")
+    def validate_location_representation(self) -> "StixLocation":
+        has_lat = self.latitude is not None
+        has_lon = self.longitude is not None
+
+        # Coordinates must be a complete pair
+        if has_lat != has_lon:
+            raise ValueError("Coordinates must be complete: both 'latitude' and 'longitude' must be present, or neither.")
+
+        if has_lat and has_lon:
+            if not (-90.0 <= self.latitude <= 90.0):
+                raise ValueError(f"Latitude must be between -90.0 and 90.0 degrees. Got {self.latitude}.")
+            if not (-180.0 <= self.longitude <= 180.0):
+                raise ValueError(f"Longitude must be between -180.0 and 180.0 degrees. Got {self.longitude}.")
+
+        if self.precision is not None:
+            if self.precision < 0:
+                raise ValueError(f"Precision must be greater than or equal to 0. Got {self.precision}.")
+            if not (has_lat and has_lon):
+                raise ValueError("Precision cannot be specified without coordinates (latitude and longitude).")
+
+        # Reject completely empty location objects (must have at least one descriptive property)
+        descriptive_fields = [
+            self.name,
+            self.description,
+            self.region,
+            self.country,
+            self.administrative_area,
+            self.city,
+            self.street_address,
+            self.postal_code,
+        ]
+        has_text_desc = any(f is not None and str(f).strip() != "" for f in descriptive_fields)
+        if not (has_text_desc or (has_lat and has_lon)):
+            raise ValueError(
+                "Location object must not be empty. At least one geographical coordinate pair or "
+                "address property (name, region, country, administrative_area, city, street_address, postal_code) must be provided."
+            )
+        return self
+
 
 class StixReport(StixCommonSdoMetadata):
     type: Literal["report"] = "report"
