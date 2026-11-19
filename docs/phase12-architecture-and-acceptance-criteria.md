@@ -1187,3 +1187,67 @@ Following formal sign-off of this v2.1.4 specification, implementation will begi
 3. Implement persistent STIX entity resolution in `backend/app/services/stix/stix_entity_mapper.py`.
 4. Implement the Two-Pass Transactional Import Engine in `backend/app/services/stix/stix_ingestion_service.py`.
 5. Author additive test suite in `backend/tests/test_stix_interoperability.py` validating AC-1 through AC-6, AC-7A, AC-8 through AC-12, and AC-14.
+
+
+---
+
+# SECTION 6: Phase 13 & Phase 14 Architecture & Acceptance Specifications
+
+## 6.1 Phase 13: ThreatMind Intelligence Quality Engine
+### Objective
+Transform threat intelligence from fragmented indicators to explainable, traceable, time-aware, uncertainty-aware, and reproducible cybersecurity decisions.
+
+### Subsystems & Invariants
+1. **Evidence-First Intelligence Engine (13.1)**:
+   - Grounded claim representations with character coordinates (offset_start, offset_end) against source documents.
+   - Cryptographic SHA-256 document digest verification.
+   - Fail-closed invariant: Mismatched digests or coordinate spans trigger ValidationState.REJECTED and zero confidence.
+2. **Persistent Attribution Dispute Ledger (13.2)**:
+   - Contradiction tracking using bidirectional CONTRADICTS graph relationships.
+   - Human analyst resolution preserves both conflicting claims without deletion (ANALYST_RESOLVED, favored claim VERIFIED, alternative DISPUTED).
+3. **Temporal Freshness Decay (13.3)**:
+   - Mathematical decay: freshness(t) = 2^(-age / half_life).
+   - Entity-specific half-life policies: IP 14d, domain 60d, URL 7d, hash 365d, vulnerability 730d.
+   - Stale warnings generated while strictly distinguishing freshness from truth.
+   - Deterministic frozen-clock evaluations via as_of_time.
+4. **Source Reliability & Feed Poisoning Quarantine (13.4)**:
+   - Multi-factor scoring discounting circular syndication copies.
+   - Automated detection and quarantine of prompt injection patterns and abnormal indicator volume bursts.
+5. **Bayesian Beta-Binomial Calibration (13.5)**:
+   - Transparent priors Beta(alpha_0, beta_0), default (2.0, 2.0).
+   - Independent corroboration updates with syndicated source discounting (w_i * 0.2).
+   - Explicit is_insufficient_evidence when observations < 2.
+   - Brier score tracking evaluating calibrated probabilities against true outcomes.
+6. **Multi-Tier Deduplication (13.6)**:
+   - Tier 1: Exact cryptographic SHA-256 match.
+   - Tier 2: 64-bit locality-sensitive SimHash with Hamming distance threshold.
+   - Tier 3: Token-level Jaccard similarity (>= 0.80) identifying syndicated press wire copy.
+7. **RFC 8785 Reproducible Decision Envelopes (13.7)**:
+   - Canonical UTF-8 JSON serialization with lexicographical key sorting.
+   - Tamper-evident cryptographic digests anchoring graph queries, inputs, outputs, and parameters.
+
+---
+
+## 6.2 Phase 14: Organization-Aware Threat Intelligence & Attack Simulation
+### Objective
+Ground external threat intelligence against internal enterprise attack surfaces and compute mathematically optimal defensive cut-sets.
+
+### Subsystems & Invariants
+1. **Enterprise Asset Inventory & SBOM Ingestion (14.1)**:
+   - Multi-tenant isolated asset catalog (endpoint, server, cloud resource, application, container, identity).
+   - CycloneDX and SPDX JSON SBOM ingestion adapters populating software package components.
+   - Strict tenant isolation: Cross-tenant operations are strictly rejected with 403 Forbidden.
+2. **SemVer / PEP 440 Constraint Matching (14.2)**:
+   - Rejection of naive substring containment.
+   - Package identity matching combined with semantic version range evaluation (e.g. < 2.15.0).
+3. **Decomposed Organization Risk Scoring (14.3)**:
+   - Transparent scoring formula:
+     S_org = w_v * S_vuln + w_e * P_exploit + w_x * E_exposure + w_c * C_asset + w_t * T_rel - w_m * M_controls
+   - Bounded to [0.0, 100.0] with explicit score breakdown and uncertainty bounds.
+4. **Graph Attack-Path Traversal & Cycle Prevention (14.4)**:
+   - NetworkX bounded directed graph traversal finding simple paths from external entry points to critical targets.
+   - Depth and path count ceilings preventing unbounded path explosion.
+5. **Minimum D3FEND Cut-Set Calculation (14.5)**:
+   - Minimum hitting set algorithm over candidate defensive intervention points across all discovered paths.
+   - 100% path disruption guarantee.
+   - Strict adherence to the frozen MITRE D3FEND catalog digest (a7a1ebffba...).
