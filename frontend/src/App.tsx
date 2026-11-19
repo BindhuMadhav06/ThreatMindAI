@@ -6,6 +6,8 @@ import { InvestigationPage } from './pages/InvestigationPage';
 import { KnowledgeGraphPage } from './pages/KnowledgeGraphPage';
 import { IngestionPage } from './pages/IngestionPage';
 import { EntitiesPage } from './pages/EntitiesPage';
+import { DetectionPanel } from './components/DetectionPanel';
+import { TimelinePanel } from './components/TimelinePanel';
 import { SystemHealth } from './types/api';
 import { fetchHealth } from './api/health';
 import { parseApiError } from './api/client';
@@ -67,6 +69,10 @@ export default function App() {
       {currentTab === 'ingestion' && <IngestionPage />}
 
       {currentTab === 'entities' && <EntitiesPage />}
+
+      {currentTab === 'detection' && <DetectionPanel />}
+
+      {currentTab === 'timeline' && <TimelinePanel />}
     </Shell>
   );
 }

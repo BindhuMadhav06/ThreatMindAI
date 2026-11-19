@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import logger
-from app.api.routes import health, ingestion, query, entities, defense, vulnerabilities, stix
+from app.api.routes import health, ingestion, query, entities, defense, vulnerabilities, stix, detection, timeline
 from app.services.graph.connection import neo4j_conn
 
 @asynccontextmanager
@@ -41,6 +41,8 @@ app.include_router(entities.router, prefix=settings.API_V1_STR, tags=["Entities 
 app.include_router(defense.router, prefix=settings.API_V1_STR, tags=["MITRE D3FEND Defensive Recommendations"])
 app.include_router(vulnerabilities.router, prefix=settings.API_V1_STR, tags=["Vulnerability Intelligence"])
 app.include_router(stix.router, prefix=settings.API_V1_STR, tags=["STIX 2.1 Interoperability"])
+app.include_router(detection.router, prefix=settings.API_V1_STR, tags=["SigmaHQ Detection Engineering"])
+app.include_router(timeline.router, prefix=settings.API_V1_STR, tags=["Attack Timeline Reconstruction"])
 
 if __name__ == "__main__":
     import uvicorn

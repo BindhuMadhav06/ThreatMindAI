@@ -6,9 +6,11 @@ import {
   UploadCloud,
   Layers,
   HelpCircle,
+  ShieldAlert,
+  Clock,
 } from 'lucide-react';
 
-export type NavTab = 'dashboard' | 'investigation' | 'graph' | 'ingestion' | 'entities';
+export type NavTab = 'dashboard' | 'investigation' | 'graph' | 'ingestion' | 'entities' | 'detection' | 'timeline';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -46,6 +48,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange }) => 
       label: 'Entity Explorer',
       icon: Layers,
       description: 'Browse actors, malware & CVEs',
+    },
+    {
+      id: 'detection' as NavTab,
+      label: 'Detection Engineering',
+      icon: ShieldAlert,
+      description: 'Sigma v2.1.0 rule generation',
+    },
+    {
+      id: 'timeline' as NavTab,
+      label: 'Attack Timeline',
+      icon: Clock,
+      description: 'Allen algebra interval ordering',
     },
   ];
 
