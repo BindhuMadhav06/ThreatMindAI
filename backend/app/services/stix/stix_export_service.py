@@ -19,6 +19,7 @@ import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple
 from fastapi import HTTPException, status
 
+from app.core.config import settings
 from app.core.logging import logger
 from app.models.stix import (
     FirstTlpExtensionData,
@@ -178,12 +179,15 @@ class StixExportService:
         seed_ids: List[str],
         max_depth: int = 2,
         max_nodes: int = 100,
+        tenant_id: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
         """
         Extracts a bounded subgraph centered at the given seed IDs.
         Enforces hard limits:
         - max_depth: clamped to range [1, 3]
         - max_nodes: clamped to range [1, 500]
+        - tenant_id: isolates entities and relationships to the specified tenant or shared/public data
+        - Fail-closed in production: HTTP 503 if Neo4j is offline or unavailable
 
         Returns:
             Tuple of (nodes_list, relationships_list, marking_definitions_dict)
@@ -196,6 +200,14 @@ class StixExportService:
         if not cleaned_seeds:
             return [], [], {}
 
+        # Fail-closed in production mode if database is offline
+        is_prod = getattr(settings, "ENVIRONMENT", "").lower() in ("production", "prod")
+        if is_prod and not self.graph_service.is_connected():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable. In-memory fallback is disabled in production mode.",
+            )
+
         nodes: List[Dict[str, Any]] = []
         relationships: List[Dict[str, Any]] = []
         marking_defs: Dict[str, Dict[str, Any]] = {}
@@ -203,13 +215,16 @@ class StixExportService:
         # 2. Extract from live Neo4j if connected
         if self.graph_service.is_connected():
             nodes, relationships, marking_defs = self._extract_from_neo4j(
-                cleaned_seeds, depth, limit
+                cleaned_seeds, depth, limit, tenant_id=tenant_id
             )
 
-        # 3. If Neo4j yielded no nodes or is offline, check in-memory ingestion service
+        # 3. If Neo4j yielded no nodes or is offline, check in-memory ingestion service (non-prod only)
         if not nodes and self.ingestion_service:
+            if is_prod:
+                # In production, do not fall back to in-memory store
+                return [], [], {}
             nodes, relationships, marking_defs = self._extract_from_memory(
-                cleaned_seeds, depth, limit
+                cleaned_seeds, depth, limit, tenant_id=tenant_id
             )
 
         return nodes, relationships, marking_defs
@@ -219,22 +234,27 @@ class StixExportService:
         seeds: List[str],
         depth: int,
         limit: int,
+        tenant_id: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
         """
-        Executes bounded, parameterized Cypher traversal on live Neo4j.
+        Executes bounded, parameterized Cypher traversal on live Neo4j with tenant isolation.
         """
+        is_prod = getattr(settings, "ENVIRONMENT", "").lower() in ("production", "prod")
         try:
-            # Traversal query: bounded variable-length path up to depth hops
+            # Traversal query: bounded variable-length path up to depth hops with tenant enforcement
             cypher = f"""
             MATCH (seed)
-            WHERE seed.id IN $seeds OR seed.stix_id IN $seeds OR seed.name IN $seeds
+            WHERE (seed.id IN $seeds OR seed.stix_id IN $seeds OR seed.name IN $seeds)
+              AND ($tenant_id IS NULL OR seed.tenant_id IS NULL OR seed.tenant_id = 'shared' OR seed.tenant_id = $tenant_id)
             MATCH path = (seed)-[*0..{depth}]-(n)
+            WHERE ($tenant_id IS NULL OR n.tenant_id IS NULL OR n.tenant_id = 'shared' OR n.tenant_id = $tenant_id)
             WITH DISTINCT n
             LIMIT $limit
             WITH collect(n) AS node_list
             UNWIND node_list AS a
             OPTIONAL MATCH (a)-[r]->(b)
             WHERE b IN node_list
+              AND ($tenant_id IS NULL OR r.tenant_id IS NULL OR r.tenant_id = 'shared' OR r.tenant_id = $tenant_id)
             RETURN collect(DISTINCT {{
                        id: coalesce(a.id, a.stix_id),
                        labels: labels(a),
@@ -248,7 +268,7 @@ class StixExportService:
                        properties: properties(r)
                    }} ELSE null END) WHERE rel IS NOT NULL] AS rels
             """
-            result = self.graph_service.conn.query(cypher, {"seeds": seeds, "limit": limit})
+            result = self.graph_service.conn.query(cypher, {"seeds": seeds, "limit": limit, "tenant_id": tenant_id})
             if not result or not result[0].get("sub_nodes"):
                 return [], [], {}
 
@@ -353,8 +373,15 @@ class StixExportService:
 
             return nodes, relationships, marking_defs
 
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.warning(f"Neo4j bounded extraction query failed: {str(e)}. Falling back to in-memory store.")
+            logger.warning(f"Neo4j bounded extraction query failed: {str(e)}.")
+            if is_prod:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Database service unavailable: {str(e)}. In-memory fallback is disabled in production mode.",
+                )
             return [], [], {}
 
     def _extract_from_memory(
@@ -362,9 +389,10 @@ class StixExportService:
         seeds: List[str],
         depth: int,
         limit: int,
+        tenant_id: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
         """
-        Executes bounded in-memory BFS extraction from the ingestion service mapper.
+        Executes bounded in-memory BFS extraction from the ingestion service mapper with tenant isolation.
         """
         if not self.ingestion_service or not hasattr(self.ingestion_service, "mapper"):
             return [], [], {}
@@ -373,6 +401,21 @@ class StixExportService:
         all_entities = mapper.entities_by_stix_id
         all_relationships = getattr(self.ingestion_service, "stored_relationships", [])
 
+        def _is_accessible(entity_data: Dict[str, Any]) -> bool:
+            if not tenant_id:
+                return True
+            props = entity_data.get("properties", {})
+            raw = entity_data.get("raw_payload", {})
+            e_tenant = props.get("tenant_id") or raw.get("tenant_id") or entity_data.get("tenant_id")
+            return (e_tenant is None) or (e_tenant in ("shared", "public", tenant_id))
+
+        def _is_rel_accessible(rel_data: Dict[str, Any]) -> bool:
+            if not tenant_id:
+                return True
+            props = rel_data.get("properties", {})
+            r_tenant = props.get("tenant_id") or rel_data.get("tenant_id")
+            return (r_tenant is None) or (r_tenant in ("shared", "public", tenant_id))
+
         # 1. Resolve seed nodes
         visited_node_ids: Set[str] = set()
         queue: List[Tuple[str, int]] = []  # (node_id, current_depth)
@@ -380,25 +423,29 @@ class StixExportService:
         for seed in seeds:
             # Check exact STIX ID
             if seed in all_entities:
-                visited_node_ids.add(seed)
-                queue.append((seed, 0))
+                if _is_accessible(all_entities[seed]):
+                    visited_node_ids.add(seed)
+                    queue.append((seed, 0))
             # Check canonical CVE index
             elif seed in mapper.cve_index:
                 mapped_id = mapper.cve_index[seed]
-                visited_node_ids.add(mapped_id)
-                queue.append((mapped_id, 0))
+                if mapped_id in all_entities and _is_accessible(all_entities[mapped_id]):
+                    visited_node_ids.add(mapped_id)
+                    queue.append((mapped_id, 0))
             # Check MITRE ATT&CK index
             elif seed in mapper.attack_pattern_index:
                 mapped_id = mapper.attack_pattern_index[seed]
-                visited_node_ids.add(mapped_id)
-                queue.append((mapped_id, 0))
+                if mapped_id in all_entities and _is_accessible(all_entities[mapped_id]):
+                    visited_node_ids.add(mapped_id)
+                    queue.append((mapped_id, 0))
             # Check name / property matches
             else:
                 for eid, edata in all_entities.items():
                     props = edata.get("properties", {})
                     if props.get("name") == seed or props.get("id") == seed or props.get("cve_id") == seed:
-                        visited_node_ids.add(eid)
-                        queue.append((eid, 0))
+                        if _is_accessible(edata):
+                            visited_node_ids.add(eid)
+                            queue.append((eid, 0))
 
         # 2. BFS Traversal
         while queue and len(visited_node_ids) < limit:
@@ -408,6 +455,8 @@ class StixExportService:
 
             # Find neighbors in relationships
             for rel in all_relationships:
+                if not _is_rel_accessible(rel):
+                    continue
                 src = rel.get("source_ref")
                 tgt = rel.get("target_ref")
                 next_id = None
@@ -416,7 +465,7 @@ class StixExportService:
                 elif tgt == curr_id and src and src not in visited_node_ids:
                     next_id = src
 
-                if next_id and next_id in all_entities:
+                if next_id and next_id in all_entities and _is_accessible(all_entities[next_id]):
                     visited_node_ids.add(next_id)
                     queue.append((next_id, curr_depth + 1))
                     if len(visited_node_ids) >= limit:
@@ -436,6 +485,8 @@ class StixExportService:
         # 4. Assemble relationships connecting extracted nodes
         relationships: List[Dict[str, Any]] = []
         for rel in all_relationships:
+            if not _is_rel_accessible(rel):
+                continue
             src = rel.get("source_ref")
             tgt = rel.get("target_ref")
             if src in visited_node_ids and tgt in visited_node_ids:
@@ -448,6 +499,8 @@ class StixExportService:
             for r in refs:
                 if r in all_entities and r not in marking_defs:
                     marking_defs[r] = all_entities[r]
+
+        return nodes, relationships, marking_defs
 
         return nodes, relationships, marking_defs
 
@@ -582,15 +635,12 @@ class StixExportService:
                 if self.is_amber_strict_marking(m_ref, m_def):
                     has_amber_strict = True
 
-            # Check granular markings for RED or AMBER+STRICT
+            # Check granular markings for AMBER+STRICT
             granular = raw.get("granular_markings") or props.get("granular_markings") or []
             for gm in granular:
                 gm_ref = gm.get("marking_ref") if isinstance(gm, dict) else getattr(gm, "marking_ref", None)
                 if gm_ref:
                     gm_def = marking_defs.get(gm_ref)
-                    if self.is_red_marking(gm_ref, gm_def):
-                        is_node_red = True
-                        break
                     if self.is_amber_strict_marking(gm_ref, gm_def):
                         has_amber_strict = True
 
@@ -628,7 +678,20 @@ class StixExportService:
                     ),
                 )
 
-        # --- STEP 3: Apply Absolute TLP:RED Suppression ---
+        # --- STEP 3: Apply Absolute TLP:RED Suppression & Transitive Scrubbing ---
+        suppressed_red_marking_ids: Set[str] = {STANDARD_STIX_TLP_RED_ID}
+        for mid, mdef in marking_defs.items():
+            if self.is_red_marking(mid, mdef):
+                suppressed_red_marking_ids.add(mid)
+
+        for n in nodes:
+            n_props = n.get("properties", {})
+            n_raw = n.get("raw_payload", {})
+            for gm in (n_raw.get("granular_markings") or n_props.get("granular_markings") or []):
+                gm_ref = gm.get("marking_ref") if isinstance(gm, dict) else getattr(gm, "marking_ref", None)
+                if gm_ref and (gm_ref == STANDARD_STIX_TLP_RED_ID or self.is_red_marking(gm_ref, marking_defs.get(gm_ref))):
+                    suppressed_red_marking_ids.add(gm_ref)
+
         filtered_nodes: List[Dict[str, Any]] = []
         for node in nodes:
             props = node.get("properties", {})
@@ -636,7 +699,36 @@ class StixExportService:
             nid = props.get("id") or props.get("stix_id") or raw.get("id")
             if nid and nid in suppressed_red_node_ids:
                 continue
-            filtered_nodes.append(node)
+
+            cleaned_node = copy.deepcopy(node)
+            c_props = cleaned_node.setdefault("properties", {})
+            c_raw = cleaned_node.setdefault("raw_payload", {})
+
+            # Scrub RED marking definition refs and suppressed RED node IDs from surviving nodes
+            for target in (c_props, c_raw):
+                if "object_marking_refs" in target:
+                    refs = target["object_marking_refs"]
+                    if isinstance(refs, list):
+                        target["object_marking_refs"] = [
+                            r for r in refs if r not in suppressed_red_marking_ids and r not in suppressed_red_node_ids
+                        ]
+                    elif isinstance(refs, str):
+                        try:
+                            parsed = json.loads(refs)
+                            if isinstance(parsed, list):
+                                target["object_marking_refs"] = [
+                                    r for r in parsed if r not in suppressed_red_marking_ids and r not in suppressed_red_node_ids
+                                ]
+                        except Exception:
+                            if refs in suppressed_red_marking_ids or refs in suppressed_red_node_ids:
+                                target["object_marking_refs"] = []
+                if "granular_markings" in target and isinstance(target["granular_markings"], list):
+                    target["granular_markings"] = [
+                        gm for gm in target["granular_markings"]
+                        if (gm.get("marking_ref") if isinstance(gm, dict) else getattr(gm, "marking_ref", None)) not in suppressed_red_marking_ids
+                    ]
+
+            filtered_nodes.append(cleaned_node)
 
         # Drop relationships referencing suppressed RED nodes or carrying RED markings
         filtered_relationships: List[Dict[str, Any]] = []
@@ -645,22 +737,34 @@ class StixExportService:
             tgt = rel.get("target_ref")
             r_props = rel.get("properties", {})
             r_refs = rel.get("object_marking_refs") or r_props.get("object_marking_refs") or []
+            if isinstance(r_refs, str):
+                try:
+                    r_refs = json.loads(r_refs)
+                except Exception:
+                    r_refs = [r_refs]
 
             # Check if rel endpoints reference suppressed RED nodes
             if src in suppressed_red_node_ids or tgt in suppressed_red_node_ids:
                 continue
 
             # Check if rel itself carries RED marking
-            is_rel_red = any(self.is_red_marking(r, marking_defs.get(r)) for r in r_refs)
+            is_rel_red = any(r in suppressed_red_marking_ids or self.is_red_marking(r, marking_defs.get(r)) for r in r_refs)
             if is_rel_red:
                 continue
 
-            filtered_relationships.append(rel)
+            cleaned_rel = copy.deepcopy(rel)
+            cleaned_refs = [r for r in r_refs if r not in suppressed_red_marking_ids]
+            if "object_marking_refs" in cleaned_rel:
+                cleaned_rel["object_marking_refs"] = cleaned_refs
+            if "object_marking_refs" in cleaned_rel.setdefault("properties", {}):
+                cleaned_rel["properties"]["object_marking_refs"] = cleaned_refs
+
+            filtered_relationships.append(cleaned_rel)
 
         # Filter out RED marking definitions from marking_defs
         filtered_marking_defs: Dict[str, Dict[str, Any]] = {}
         for mid, mdef in marking_defs.items():
-            if not self.is_red_marking(mid, mdef):
+            if mid not in suppressed_red_marking_ids and not self.is_red_marking(mid, mdef):
                 filtered_marking_defs[mid] = mdef
 
         return filtered_nodes, filtered_relationships, filtered_marking_defs
@@ -738,6 +842,11 @@ class StixExportService:
                     marking_refs = [marking_refs]
             if isinstance(marking_refs, list):
                 sdo["object_marking_refs"] = marking_refs
+
+        # Handle granular markings
+        granular_markings = props.get("granular_markings")
+        if granular_markings and isinstance(granular_markings, list):
+            sdo["granular_markings"] = granular_markings
 
         # Type-specific required fields per STIX 2.1 Specification
         if stix_type == "malware":
@@ -953,6 +1062,7 @@ class StixExportService:
         max_nodes: int = 100,
         is_extension_aware: bool = False,
         is_internal_org_member: bool = False,
+        tenant_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         High-level orchestrator for bounded export:
@@ -964,6 +1074,7 @@ class StixExportService:
             seed_ids=seed_ids,
             max_depth=max_depth,
             max_nodes=max_nodes,
+            tenant_id=tenant_id,
         )
 
         filtered_nodes, filtered_rels, filtered_markings = self.evaluate_and_filter_tlp(
