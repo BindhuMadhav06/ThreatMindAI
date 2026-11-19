@@ -1135,6 +1135,29 @@ To maintain software reliability and prevent scope creep, Phase 12A is divided i
 
 ---
 
+## 3.3 Phase 12B Acceptance Matrix: Detection Engineering (AC-15 through AC-19)
+
+| # | Acceptance Criterion | Test Verification Method | Passing Requirement | Milestone |
+| :--- | :--- | :--- | :--- | :--- |
+| **AC-15** | **SigmaHQ v2.1.0 Schema Compliance** | Generate and validate rules using official `pySigma==2.1.0` parser; verify required fields (`title`, `id`, `status`, `description`, `logsource`, `detection`, `level`). | 100% of generated and ingested Sigma rules parse cleanly under `pySigma.rule.SigmaRule.from_yaml`; missing fields or malformed syntax produce structured error diagnostics. | **12B** |
+| **AC-16** | **Zero Detection Condition Schema Pollution** | Validate generated rule YAML with `threatmind_provenance` sidecar block; inspect `detection.condition` string. | `detection.condition` strictly contains standard Sigma expressions (e.g. `selection`, `1 of them`); zero ThreatMind metadata keywords leak into detection logic. | **12B** |
+| **AC-17** | **Evidence-Grounded Rule Generation** | Generate rule from MITRE ATT&CK technique (e.g. `T1059.001`), D3FEND countermeasure (`D3-PA`), and raw execution snippet. | Generates accurate detection selections (e.g. `Image|endswith`, `CommandLine|contains`), correct ATT&CK tags (`attack.execution`, `attack.t1059.001`), and attached `threatmind_provenance`. | **12B** |
+| **AC-18** | **pySigma Validation Pipeline** | Submit syntactically valid and invalid YAML rules to `/api/v1/detection/rules/validate`. | Returns accurate boolean `is_valid`, error messages, and warnings without server exception. | **12B** |
+| **AC-19** | **Human Review Workflow State Machine** | Transition rule status: `draft` $\rightarrow$ `under_review` $\rightarrow$ `approved` / `rejected` via `/api/v1/detection/rules/{id}/review`. | Rules default to `draft`; transitions enforce valid states; records `reviewed_by`, `reviewed_at`, and analyst audit notes. | **12B** |
+
+---
+
+## 3.4 Phase 12C Acceptance Matrix: Attack Timeline Reconstruction (AC-20 through AC-23)
+
+| # | Acceptance Criterion | Test Verification Method | Passing Requirement | Milestone |
+| :--- | :--- | :--- | :--- | :--- |
+| **AC-20** | **Temporal Event Abstraction & Latency Separation** | Inspect event data model for distinct `occurrence_start`/`occurrence_end`, `observation_time`, `publication_time`, and `ingestion_time`. | Temporal models strictly separate actual attacker execution time from local sensor observation and report publication latency. | **12C** |
+| **AC-21** | **Allen Interval Algebra Implementation** | Evaluate all 13 qualitative relations (`before`, `after`, `meets`, `met_by`, `overlaps`, `overlapped_by`, `starts`, `started_by`, `during`, `contains`, `finishes`, `finished_by`, `equals`). | 100% mathematical fidelity per James Allen (1983) interval axioms; correctly classifies pairwise event intervals. | **12C** |
+| **AC-22** | **Multi-Source Contradiction & Disparity Detection** | Ingest contradictory reports from different sources (e.g. Source A reports technique at 02:00, Source B reports at 08:00). | Automatically detects `TIMESTAMP_DISPARITY` and `TEMPORAL_ORDER_INVERSION`; computes discrepancy delta in hours. | **12C** |
+| **AC-23** | **Parallel Track Preservation (Zero Lossy Averaging)** | Reconstruct timeline with conflicting intelligence reports. | Both conflicting assertions are preserved on distinct parallel tracks; sets `has_disputes: true`; zero silent deletion or timestamp averaging. | **12C** |
+
+---
+
 # SECTION 4: Risk Analysis & Open Architectural Decisions
 
 | # | Risk Area | Impact | Mitigation / Architectural Decision |
