@@ -11,11 +11,16 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 
 from app.core.logging import logger
 from app.services.stix.stix_ingestion_service import StixIngestionService
+from app.services.stix.stix_export_service import StixExportService
 
 router = APIRouter(prefix="/stix")
 
-# Shared singleton service instance for in-memory session mapping
+# Shared singleton service instances for in-memory session mapping and export
 stix_service = StixIngestionService()
+stix_export_service = StixExportService(
+    ingestion_service=stix_service,
+    graph_service=stix_service.graph_service,
+)
 
 # 50 MB payload ceiling per Architecture Spec §1.8 / Risk R-1
 MAX_STIX_PAYLOAD_BYTES = 50 * 1024 * 1024
@@ -168,3 +173,78 @@ async def import_stix_bundle(
         "ambiguous_entity_conflicts": result["ambiguous_entity_conflicts"],
         "rejection_ledger": result["rejection_ledger"],
     }
+
+
+@router.get("/export/bundle", status_code=status.HTTP_200_OK)
+async def export_stix_bundle(
+    request: Request,
+    investigation_id: Optional[str] = Query(default=None, description="Investigation identifier anchor"),
+    actor_id: Optional[str] = Query(default=None, description="Threat actor identifier anchor"),
+    technique_id: Optional[str] = Query(default=None, description="Attack technique identifier anchor"),
+    entity_ids: Optional[str] = Query(default=None, description="Comma-separated list of entity or STIX identifiers"),
+    max_depth: int = Query(default=2, ge=1, le=3, description="Maximum traversal depth (hard limit: 3 hops)"),
+    max_nodes: int = Query(default=100, ge=1, le=500, description="Maximum node extraction count (hard limit: 500)"),
+    user_role: str = Depends(verify_stix_authorization),
+    x_recipient_extension_aware: Optional[str] = Header(None, alias="X-Recipient-Extension-Aware"),
+    x_recipient_org_internal: Optional[str] = Header(None, alias="X-Recipient-Org-Internal"),
+) -> Dict[str, Any]:
+    """
+    Exports a standards-compliant OASIS STIX 2.1 Bundle containing a bounded subgraph.
+    Enforces AC-7B (Export TLP Authorization & Recipient Capability Gating) and
+    AC-13 (Bounded Export Scope & Round-Trip Validation).
+
+    Guarantees:
+    - Mandatory scoping: requires at least one of investigation_id, actor_id, technique_id, or entity_ids (HTTP 400).
+    - Traversal limits: max_depth <= 3, max_nodes <= 500.
+    - Synchronous payload ceiling: max 25MB (HTTP 413).
+    - Absolute TLP:RED suppression: zero generic admin bypass; drops all incident edges to RED nodes.
+    - Recipient capability gating: extension-unaware or external recipients requesting AMBER+STRICT are denied (HTTP 403).
+    - Interoperability mapping: FIRST TLP:CLEAR maps to STIX 2.1 TLP:WHITE carrying the FIRST extension.
+    - Container invariant: bundle root has NO spec_version property.
+    """
+    # 1. Enforce Mandatory Scoping
+    scope_params = [investigation_id, actor_id, technique_id, entity_ids]
+    if not any(p and p.strip() for p in scope_params if isinstance(p, str)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Full-graph export is prohibited. Request must specify at least one scope parameter: investigation_id, actor_id, technique_id, or entity_ids.",
+        )
+
+    # 2. Extract Seed Identifiers
+    seed_ids: List[str] = []
+    if investigation_id and investigation_id.strip():
+        seed_ids.append(investigation_id.strip())
+    if actor_id and actor_id.strip():
+        seed_ids.append(actor_id.strip())
+    if technique_id and technique_id.strip():
+        seed_ids.append(technique_id.strip())
+    if entity_ids and entity_ids.strip():
+        for e in entity_ids.split(","):
+            cleaned = e.strip()
+            if cleaned:
+                seed_ids.append(cleaned)
+
+    # 3. Derive Recipient Capabilities Strictly from Trusted Headers
+    # Query parameter spoofing attempts (e.g. ?is_extension_aware=true) are ignored.
+    is_extension_aware = (x_recipient_extension_aware or "").strip().lower() == "true"
+    is_internal_org_member = (x_recipient_org_internal or "").strip().lower() == "true"
+
+    # 4. Execute Export Pipeline
+    try:
+        bundle = stix_export_service.export_subgraph(
+            seed_ids=seed_ids,
+            max_depth=max_depth,
+            max_nodes=max_nodes,
+            is_extension_aware=is_extension_aware,
+            is_internal_org_member=is_internal_org_member,
+        )
+        return bundle
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"STIX bundle export failed with unexpected exception: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="STIX bundle export failed due to an internal server error. Check server logs for details.",
+        )
+
