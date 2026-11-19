@@ -8,9 +8,11 @@ import {
   HelpCircle,
   ShieldAlert,
   Clock,
+  ShieldCheck,
+  Target,
 } from 'lucide-react';
 
-export type NavTab = 'dashboard' | 'investigation' | 'graph' | 'ingestion' | 'entities' | 'detection' | 'timeline';
+export type NavTab = 'dashboard' | 'investigation' | 'graph' | 'ingestion' | 'entities' | 'detection' | 'timeline' | 'quality' | 'organization';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -60,6 +62,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange }) => 
       label: 'Attack Timeline',
       icon: Clock,
       description: 'Allen algebra interval ordering',
+    },
+    {
+      id: 'quality' as NavTab,
+      label: 'Intelligence Quality',
+      icon: ShieldCheck,
+      description: 'Grounding & dispute ledger',
+    },
+    {
+      id: 'organization' as NavTab,
+      label: 'Attack Simulation',
+      icon: Target,
+      description: 'Enterprise SBOM & D3FEND cut-sets',
     },
   ];
 

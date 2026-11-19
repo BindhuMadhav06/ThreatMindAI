@@ -8,6 +8,8 @@ import { IngestionPage } from './pages/IngestionPage';
 import { EntitiesPage } from './pages/EntitiesPage';
 import { DetectionPanel } from './components/DetectionPanel';
 import { TimelinePanel } from './components/TimelinePanel';
+import { IntelligenceQualityPanel } from './components/IntelligenceQualityPanel';
+import { AttackPathSimulationPanel } from './components/AttackPathSimulationPanel';
 import { SystemHealth } from './types/api';
 import { fetchHealth } from './api/health';
 import { parseApiError } from './api/client';
@@ -73,6 +75,10 @@ export default function App() {
       {currentTab === 'detection' && <DetectionPanel />}
 
       {currentTab === 'timeline' && <TimelinePanel />}
+
+      {currentTab === 'quality' && <IntelligenceQualityPanel />}
+
+      {currentTab === 'organization' && <AttackPathSimulationPanel />}
     </Shell>
   );
 }
