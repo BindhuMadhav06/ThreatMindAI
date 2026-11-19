@@ -1,6 +1,6 @@
 """
 ThreatMind Phase 12A Milestone 1 — STIX 2.1 Interoperability Test Suite
-Tests AC-1 through AC-6, AC-7A, AC-8 through AC-12, and AC-14.
+Tests AC-1 through AC-6, AC-7A, AC-8 through AC-12, and RFC 8785 canonical immutability.
 Verifies discriminated SDO models, 4-way tuple classification, SCO auditing,
 granular marking XOR invariant, permanent revocation, and canonical immutability.
 """
