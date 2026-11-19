@@ -15,6 +15,9 @@ from app.api.routes import (
     timeline,
     quality,
     organization,
+    investigation,
+    privacy,
+    taxii,
 )
 from app.services.graph.connection import neo4j_conn
 
@@ -59,6 +62,12 @@ app.include_router(quality.router, prefix=settings.API_V1_STR, tags=["Intelligen
 app.include_router(quality.router, prefix="/api", tags=["Intelligence Quality Engine"], include_in_schema=False)
 app.include_router(organization.router, prefix=settings.API_V1_STR, tags=["Organization-Aware Intelligence"])
 app.include_router(organization.router, prefix="/api", tags=["Organization-Aware Intelligence"], include_in_schema=False)
+app.include_router(investigation.router, prefix=settings.API_V1_STR, tags=["Trusted AI Investigation Agents"])
+app.include_router(investigation.router, prefix="/api", tags=["Trusted AI Investigation Agents"], include_in_schema=False)
+app.include_router(privacy.router, prefix=settings.API_V1_STR, tags=["Privacy-Preserving Collaborative Intelligence"])
+app.include_router(privacy.router, prefix="/api", tags=["Privacy-Preserving Collaborative Intelligence"], include_in_schema=False)
+app.include_router(taxii.router, prefix=settings.API_V1_STR, tags=["TAXII 2.1 Federation"])
+app.include_router(taxii.router, prefix="/api", tags=["TAXII 2.1 Federation"], include_in_schema=False)
 
 if __name__ == "__main__":
     import uvicorn
