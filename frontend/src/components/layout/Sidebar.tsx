@@ -10,9 +10,11 @@ import {
   Clock,
   ShieldCheck,
   Target,
+  Bot,
+  Share2,
 } from 'lucide-react';
 
-export type NavTab = 'dashboard' | 'investigation' | 'graph' | 'ingestion' | 'entities' | 'detection' | 'timeline' | 'quality' | 'organization';
+export type NavTab = 'dashboard' | 'investigation' | 'graph' | 'ingestion' | 'entities' | 'detection' | 'timeline' | 'quality' | 'organization' | 'investigation_agent' | 'federation';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -74,6 +76,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange }) => 
       label: 'Attack Simulation',
       icon: Target,
       description: 'Enterprise SBOM & D3FEND cut-sets',
+    },
+    {
+      id: 'investigation_agent' as NavTab,
+      label: 'AI Investigation Agent',
+      icon: Bot,
+      description: 'Bounded multi-step reasoning',
+    },
+    {
+      id: 'federation' as NavTab,
+      label: 'TAXII & Collaborative Privacy',
+      icon: Share2,
+      description: 'Salted HMAC & federated sharing',
     },
   ];
 

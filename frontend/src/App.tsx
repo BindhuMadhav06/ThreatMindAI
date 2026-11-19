@@ -10,6 +10,8 @@ import { DetectionPanel } from './components/DetectionPanel';
 import { TimelinePanel } from './components/TimelinePanel';
 import { IntelligenceQualityPanel } from './components/IntelligenceQualityPanel';
 import { AttackPathSimulationPanel } from './components/AttackPathSimulationPanel';
+import { InvestigationAgentPanel } from './components/InvestigationAgentPanel';
+import { CollaborativeSharingPanel } from './components/CollaborativeSharingPanel';
 import { SystemHealth } from './types/api';
 import { fetchHealth } from './api/health';
 import { parseApiError } from './api/client';
@@ -79,6 +81,10 @@ export default function App() {
       {currentTab === 'quality' && <IntelligenceQualityPanel />}
 
       {currentTab === 'organization' && <AttackPathSimulationPanel />}
+
+      {currentTab === 'investigation_agent' && <InvestigationAgentPanel />}
+
+      {currentTab === 'federation' && <CollaborativeSharingPanel />}
     </Shell>
   );
 }
