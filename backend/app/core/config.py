@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
+    # Authentication & Cryptographic Security
+    JWT_SECRET_KEY: str = "threatmind-dev-secret-key-change-in-production-min32bytes"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ISSUER: str = "threatmind-auth"
+    JWT_AUDIENCE: str = "threatmind-api"
+    JWT_EXPIRATION_MINUTES: int = 60
+
     # LLM Abstraction Settings
     LLM_PROVIDER: str = "gemini"
     GEMINI_MODEL: str = "gemini-2.5-flash"

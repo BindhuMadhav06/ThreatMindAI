@@ -87,6 +87,13 @@ class HITLApprovalService:
         if tenant_id and action.tenant_id != tenant_id and tenant_id != "admin":
             raise PermissionError(f"Access denied: Action belongs to tenant '{action.tenant_id}', not '{tenant_id}'.")
 
+        # Prevent duplicate reviews, replay attacks, or invalid state transitions
+        if action.approval_status != ActionApprovalStatus.PENDING:
+            raise ValueError(
+                f"Action '{action_id}' cannot be reviewed: current status is '{action.approval_status.value}'. "
+                f"Replay and duplicate reviews are rejected."
+            )
+
         if decision not in (ActionApprovalStatus.APPROVED, ActionApprovalStatus.REJECTED):
             raise ValueError(f"Invalid review decision: {decision}")
 

@@ -99,6 +99,13 @@ async def review_action(
     Derives approver identity server-side from verified user identity.
     Enforces tenant boundary check so tenant A cannot review tenant B's actions.
     """
+    # Verify authorized role for action review
+    if current_user.role not in {"analyst", "admin", "lead"}:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Role '{current_user.role}' is not authorized to review defensive actions.",
+        )
+
     action = approval_service.get_action(action_id, tenant_id=current_user.tenant_id)
     if not action:
         raise HTTPException(
