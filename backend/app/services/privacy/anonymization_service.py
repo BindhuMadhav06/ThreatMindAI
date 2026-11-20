@@ -1,9 +1,11 @@
 """
 Phase 16: Cryptographic Privacy & Anonymization Engine.
+
 Implements persistent tenant-isolated salted HMAC transformations, PII/credential redaction,
-and RFC 1918 private address pseudonymization.
+and RFC 1918 / RFC 4193 / CGNAT / Link-Local / Documentation / Multicast address pseudonymization.
 Guarantees stable pseudonymization across server restarts via persistent salt storage.
-Strictly rejects unsalted hashing to protect against dictionary enumeration attacks.
+Enforces at least 128 bits of output entropy (32 hex characters) using a versioned scheme,
+and strictly rejects unsalted hashing to protect against dictionary enumeration attacks.
 """
 
 import hashlib
@@ -26,16 +28,6 @@ class AnonymizationService:
     and preventing re-identification via low-entropy brute-force attacks.
     Salts are securely persisted per tenant so pseudonyms remain stable across restarts.
     """
-
-    PRIVATE_NETWORKS = [
-        ipaddress.ip_network("10.0.0.0/8"),
-        ipaddress.ip_network("172.16.0.0/12"),
-        ipaddress.ip_network("192.168.0.0/16"),
-        ipaddress.ip_network("127.0.0.0/8"),
-        ipaddress.ip_network("169.254.0.0/16"),
-        ipaddress.ip_network("fc00::/7"),
-        ipaddress.ip_network("::1/128"),
-    ]
 
     def __init__(self, storage_dir: Optional[Path] = None):
         self._storage_dir = storage_dir or (Path(__file__).resolve().parents[4] / "data" / "federation")
@@ -77,45 +69,88 @@ class AnonymizationService:
             self._save_persisted_salts()
         return self._tenant_salts[clean_tenant]
 
-    def _compute_hmac(self, value: str, tenant_id: str) -> str:
-        """Computes 16-hex character (64-bit) keyed HMAC digest."""
+    def _compute_hmac(self, value: str, tenant_id: str, version: str = "v2") -> str:
+        """
+        Computes keyed HMAC digest.
+        Version 'v2' produces 32-hex character (128-bit) digest.
+        Version 'v1' (legacy) produces 16-hex character (64-bit) digest.
+        """
         salt = self.get_or_create_tenant_salt(tenant_id)
         digest = hmac.new(salt, value.encode("utf-8"), hashlib.sha256).hexdigest()
-        return digest[:16]
+        if version == "v1":
+            return digest[:16]
+        return digest[:32]
 
     @classmethod
-    def is_private_ip(cls, ip_str: str) -> bool:
-        """Check if an IPv4 or IPv6 address belongs strictly to private/internal ranges (RFC 1918/4193)."""
+    def should_mask_ip(cls, ip_str: str) -> bool:
+        """
+        Determines whether an IP address must be masked/pseudonymized.
+        Returns True for:
+        - RFC 1918 Private IPv4 (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+        - RFC 4193 Unique Local IPv6 (fc00::/7)
+        - Loopback (127.0.0.0/8, ::1)
+        - Link-Local (169.254.0.0/16, fe80::/10)
+        - Carrier-Grade NAT / RFC 6598 (100.64.0.0/10)
+        - Documentation TEST-NETs (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24, 2001:db8::/32)
+        - Multicast (224.0.0.0/4, ff00::/8)
+        - Reserved / Broadcast (240.0.0.0/4, 255.255.255.255)
+        
+        Returns False for routable public internet addresses (e.g., 8.8.8.8, 1.1.1.1, 2606:4700:4700::1111)
+        which represent legitimate external C2 indicators.
+        """
         try:
             ip_obj = ipaddress.ip_address(ip_str.strip())
-            return any(ip_obj in net for net in cls.PRIVATE_NETWORKS)
+            cgnat = ipaddress.ip_network("100.64.0.0/10")
+            if ip_obj.version == 4 and ip_obj in cgnat:
+                return True
+            if (
+                ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_link_local
+                or ip_obj.is_multicast
+                or ip_obj.is_reserved
+                or not ip_obj.is_global
+            ):
+                return True
+            return False
         except ValueError:
             return False
 
-    def transform_internal_ip(self, ip_str: str, tenant_id: str) -> Tuple[str, Optional[AnonymizationRecord]]:
+    @classmethod
+    def is_private_ip(cls, ip_str: str) -> bool:
+        """Backward-compatible alias for should_mask_ip."""
+        return cls.should_mask_ip(ip_str)
+
+    def transform_internal_ip(
+        self, ip_str: str, tenant_id: str, version: str = "v2"
+    ) -> Tuple[str, Optional[AnonymizationRecord]]:
         """
-        Transforms private internal IP into a salted HMAC pseudonym.
+        Transforms private internal IP into a salted HMAC pseudonym with >= 128-bit output.
         Preserves external public threat indicators without modification.
         """
         clean_ip = ip_str.strip()
-        if not self.is_private_ip(clean_ip):
+        if not self.should_mask_ip(clean_ip):
             # Public IP (external C2 indicator): preserved for threat correlation
             return clean_ip, None
 
-        pseudonym = f"pseudonym-ip-{self._compute_hmac(clean_ip, tenant_id)}"
+        raw_hmac = self._compute_hmac(clean_ip, tenant_id, version=version)
+        pseudonym = f"pseudonym-ip-{raw_hmac}"
         record = AnonymizationRecord(
             original_type="INTERNAL_IP",
             transformed_value=pseudonym,
             method=AnonymizationMethod.HMAC_SHA256_SALTED,
             salt_hash_ref=hashlib.sha256(self.get_or_create_tenant_salt(tenant_id)).hexdigest()[:8],
-            entropy_warning="Private RFC1918 IP transformed via keyed HMAC to prevent rainbow enumeration."
+            entropy_warning=f"Non-public IP transformed via keyed HMAC ({len(raw_hmac)*4}-bit entropy) to prevent enumeration."
         )
         return pseudonym, record
 
-    def transform_internal_hostname(self, hostname: str, tenant_id: str) -> Tuple[str, AnonymizationRecord]:
-        """Transforms internal server FQDNs into salted HMAC pseudonyms."""
+    def transform_internal_hostname(
+        self, hostname: str, tenant_id: str, version: str = "v2"
+    ) -> Tuple[str, AnonymizationRecord]:
+        """Transforms internal server FQDNs into salted HMAC pseudonyms with >= 128-bit output."""
         clean_host = hostname.strip().lower()
-        pseudonym = f"pseudonym-host-{self._compute_hmac(clean_host, tenant_id)}.internal"
+        raw_hmac = self._compute_hmac(clean_host, tenant_id, version=version)
+        pseudonym = f"pseudonym-host-{raw_hmac}.internal"
         record = AnonymizationRecord(
             original_type="INTERNAL_HOSTNAME",
             transformed_value=pseudonym,
@@ -143,9 +178,9 @@ class AnonymizationService:
         """
         Recursively sanitizes nested dictionaries, lists, and strings:
         - Redacts PII and credentials
-        - Pseudonymizes RFC 1918 private IPv4/IPv6 addresses
+        - Pseudonymizes internal/non-public IPv4 and IPv6 addresses
         - Pseudonymizes internal hostnames (.internal, .corp, .local)
-        - Preserves public C2 IPs and public external domain names
+        - Preserves public routable C2 IPs and public external domain names
         """
         if isinstance(data, dict):
             return {k: self.sanitize_recursive(v, tenant_id) for k, v in data.items()}
@@ -154,13 +189,13 @@ class AnonymizationService:
         elif isinstance(data, str):
             text = self.redact_pii_and_credentials(data)
 
-            # If the entire string is just a single private IP
-            if self.is_private_ip(text.strip()):
-                anon_ip, _ = self.transform_internal_ip(text.strip(), tenant_id)
+            # If the entire string is just a single IP address
+            clean_str = text.strip()
+            if self.should_mask_ip(clean_str):
+                anon_ip, _ = self.transform_internal_ip(clean_str, tenant_id)
                 return anon_ip
 
             # If the entire string is just a single internal hostname
-            clean_str = text.strip()
             if any(clean_str.lower().endswith(suffix) for suffix in (".internal", ".corp", ".local")) and " " not in clean_str:
                 anon_host, _ = self.transform_internal_hostname(clean_str, tenant_id)
                 return anon_host
@@ -172,10 +207,10 @@ class AnonymizationService:
                 text
             )
 
-            # In free-text sentences, replace standalone private IPv4 addresses
+            # In free-text sentences, replace standalone non-public IPv4 addresses
             def _replace_ip(m):
                 cand_ip = m.group(0)
-                if self.is_private_ip(cand_ip):
+                if self.should_mask_ip(cand_ip):
                     return self.transform_internal_ip(cand_ip, tenant_id)[0]
                 return cand_ip
 

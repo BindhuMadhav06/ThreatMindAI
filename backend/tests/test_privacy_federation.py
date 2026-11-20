@@ -23,6 +23,7 @@ from app.models.privacy import (
     TLPMarking,
 )
 from app.services.privacy import AnonymizationService, SharingPolicyService, TAXIIFederationService
+from app.core.security import create_access_token
 
 client = TestClient(app)
 
@@ -73,7 +74,7 @@ def test_private_vs_public_ip_handling():
     assert rec is not None
 
     # 2. Public threat indicators (malicious C2) must be preserved for threat sharing
-    public_c2 = "198.51.100.42"
+    public_c2 = "185.199.108.153"
     assert anonymizer.is_private_ip(public_c2) is False
     pres_ip, rec_pub = anonymizer.transform_internal_ip(public_c2, "tenant_prod")
     assert pres_ip == public_c2
@@ -209,10 +210,16 @@ def test_collaborative_retraction_without_history_erasure():
 # ============================================================================
 
 def test_privacy_and_taxii_api_endpoints():
+    token = create_access_token(user_id="analyst_test", tenant_id="tenant_api_sec", role="analyst")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Tenant-ID": "tenant_api_sec"
+    }
+
     # 1. Anonymize endpoint
     anon_resp = client.post(
         "/api/v1/privacy/anonymize",
-        headers={"X-Tenant-ID": "tenant_api_sec"},
+        headers=headers,
         json={"value": "192.168.1.50", "identifier_type": "INTERNAL_IP"}
     )
     assert anon_resp.status_code == 200
@@ -221,7 +228,7 @@ def test_privacy_and_taxii_api_endpoints():
     # 2. Sharing evaluation endpoint
     eval_resp = client.post(
         "/api/v1/privacy/sharing/evaluate",
-        headers={"X-Tenant-ID": "tenant_api_sec"},
+        headers=headers,
         json={
             "object_tlp": "TLP:RED",
             "requested_scope": "COMMUNITY_ISAC"
@@ -293,13 +300,13 @@ def test_recursive_sanitization_nested_objects():
         "name": "Internal Breach Analysis",
         "description": "Exfiltration from host dc1.corp.internal with token Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
         "network": {
-            "source_ip": "10.0.5.12",  # RFC 1918 private IP
-            "c2_ip": "198.51.100.88",   # Public routable C2 IP
+            "source_ip": "10.0.5.12",       # RFC 1918 private IP
+            "c2_ip": "185.199.108.153",    # Real public routable C2 IP (GitHub Pages)
             "internal_dns": "dns.corp.internal"
         },
         "indicators": [
             {"ip": "172.16.0.4", "type": "internal"},
-            {"ip": "203.0.113.1", "type": "public"}
+            {"ip": "8.8.8.8", "type": "public"}
         ]
     }
 
@@ -309,14 +316,84 @@ def test_recursive_sanitization_nested_objects():
     assert "[REDACTED_CREDENTIAL]" in sanitized["description"]
     assert "eyJhbGci" not in sanitized["description"]
 
-    # 2. Private IPs pseudonymized
+    # 2. Private IPs pseudonymized with >= 128-bit output
     assert sanitized["network"]["source_ip"].startswith("pseudonym-ip-")
     assert sanitized["indicators"][0]["ip"].startswith("pseudonym-ip-")
+    # Verify 128-bit entropy (32 hex characters after prefix)
+    anon_hash = sanitized["network"]["source_ip"].replace("pseudonym-ip-", "")
+    assert len(anon_hash) >= 32
 
     # 3. Internal hostnames pseudonymized
     assert sanitized["network"]["internal_dns"].startswith("pseudonym-host-")
     assert "corp.internal" not in sanitized["network"]["internal_dns"]
 
-    # 4. Public C2 indicators PRESERVED intact for threat intelligence sharing
-    assert sanitized["network"]["c2_ip"] == "198.51.100.88"
-    assert sanitized["indicators"][1]["ip"] == "203.0.113.1"
+    # 4. Genuinely public routable C2 indicators PRESERVED intact
+    assert sanitized["network"]["c2_ip"] == "185.199.108.153"
+    assert sanitized["indicators"][1]["ip"] == "8.8.8.8"
+
+
+def test_ip_address_classification_and_masking_matrix():
+    """
+    Offline deterministic verification across all IPv4 and IPv6 address classes:
+    - Public IPv4 / IPv6: PRESERVED intact
+    - Private RFC 1918 / RFC 4193: MASKED
+    - Loopback: MASKED
+    - Link-Local: MASKED
+    - Carrier-Grade NAT (100.64.0.0/10): MASKED
+    - Documentation-only (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24, 2001:db8::/32): MASKED
+    - Multicast & Reserved: MASKED
+    - Malformed IP strings: Handled safely
+    """
+    anonymizer = AnonymizationService()
+    tenant = "tenant_matrix_test"
+
+    matrix = [
+        # (IP string, should_be_masked, category)
+        ("8.8.8.8", False, "Public IPv4 Google DNS"),
+        ("1.1.1.1", False, "Public IPv4 Cloudflare"),
+        ("185.199.108.153", False, "Public IPv4 GitHub"),
+        ("2606:4700:4700::1111", False, "Public IPv6 Cloudflare"),
+        ("10.0.0.1", True, "Private IPv4 10/8"),
+        ("10.255.255.254", True, "Private IPv4 10/8 boundary"),
+        ("172.16.0.5", True, "Private IPv4 172.16/12"),
+        ("172.31.255.254", True, "Private IPv4 172.31 boundary"),
+        ("192.168.1.1", True, "Private IPv4 192.168/16"),
+        ("127.0.0.1", True, "IPv4 Loopback"),
+        ("127.0.0.53", True, "IPv4 Systemd Resolved"),
+        ("::1", True, "IPv6 Loopback"),
+        ("169.254.169.254", True, "IPv4 Link-Local / Cloud Metadata"),
+        ("fe80::1", True, "IPv6 Link-Local"),
+        ("100.64.0.1", True, "Carrier-Grade NAT RFC 6598"),
+        ("100.127.255.254", True, "Carrier-Grade NAT boundary"),
+        ("192.0.2.1", True, "TEST-NET-1 Documentation"),
+        ("198.51.100.42", True, "TEST-NET-2 Documentation"),
+        ("203.0.113.99", True, "TEST-NET-3 Documentation"),
+        ("2001:db8::1", True, "IPv6 Documentation"),
+        ("224.0.0.1", True, "IPv4 Multicast"),
+        ("ff02::1", True, "IPv6 Multicast"),
+        ("240.0.0.1", True, "IPv4 Reserved Class E"),
+    ]
+
+    for ip_str, should_mask, desc in matrix:
+        # 1. Method should_mask_ip check
+        assert AnonymizationService.should_mask_ip(ip_str) == should_mask, f"Failed should_mask_ip for {desc} ({ip_str})"
+
+        # 2. Method transform_internal_ip check
+        transformed, record = anonymizer.transform_internal_ip(ip_str, tenant_id=tenant)
+        if should_mask:
+            assert transformed.startswith("pseudonym-ip-"), f"Expected pseudonym for {desc} ({ip_str}), got {transformed}"
+            assert record is not None
+            # Verify 128-bit entropy (32 hex characters)
+            hex_part = transformed.replace("pseudonym-ip-", "")
+            assert len(hex_part) == 32, f"Expected 32-hex (128-bit) digest, got {len(hex_part)}"
+        else:
+            assert transformed == ip_str, f"Expected preserved public IP for {desc} ({ip_str}), got {transformed}"
+            assert record is None
+
+    # 3. Test malformed IP strings handle safely without throwing
+    malformed = ["999.999.999.999", "not_an_ip", "1.2.3.4.5", "256.1.1.1"]
+    for m in malformed:
+        assert AnonymizationService.should_mask_ip(m) is False
+        trans_m, rec_m = anonymizer.transform_internal_ip(m, tenant_id=tenant)
+        assert trans_m == m
+        assert rec_m is None
