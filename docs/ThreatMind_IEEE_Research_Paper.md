@@ -12,7 +12,7 @@ Cyber Threat Intelligence (CTI) investigation requires synthesizing complex, mul
 
 ThreatMind constrains generative reasoning within a "deterministic sandwich": pre-generation retrieval is bounded to an enterprise property knowledge graph (Neo4j) using schema-governed, multi-hop traversals ($\le 3$ hops) with strict endpoint-connectivity invariants; post-generation responses undergo deterministic multi-stage validation verifying cryptographic evidence hashes (`ev_...`), enforcing lexical passage alignment, and suppressing unverified compromise claims. To prevent reliance on unverified or decaying indicators, ThreatMind incorporates a Bayesian intelligence quality engine featuring Beta-Binomial credibility calibration, Allen's Interval Algebra temporal contradiction detection, exponential freshness decay, and multi-tier SimHash near-duplicate clustering. ThreatMind bridges generic external CTI with internal enterprise environments via Software Bill of Materials (SBOM) ingestion, SemVer dependency constraint resolution, decomposed organizational risk scoring ($S_{\text{org}}$), and polynomial-time greedy Minimum D3FEND Cut-Set countermeasure synthesis. For active investigation, ThreatMind introduces a bounded finite state machine orchestrator operating under strict tool sandboxing and Human-in-the-Loop (HITL) approval queues, guaranteeing zero autonomous modification of production environments. Finally, ThreatMind enables privacy-preserving collaborative intelligence via persistent tenant-salted HMAC-SHA256 pseudonymization, RFC 1918 internal IP masking, recursive nested sanitization, RFC 8785 canonical JSON serialization, and persistent TAXII 2.1 federation with cryptographically signed tombstone retractions.
 
-We empirically evaluate ThreatMind across a comprehensive verification suite: **244/244 backend tests passing (100.0%) across 40 test files**, **53/53 frontend tests passing (100.0%)**, and **4/4 Phase 11 release verification gates passed (100.0%)**, including MITRE D3FEND catalog digest preservation (`a7a1ebffba...`). On labelled empirical benchmarks comprising authentic CISA advisories and MITRE ATT&CK groups, ThreatMind achieves **100.0% Abstention Precision (5/5)**, **100.0% Abstention Recall (5/5)**, **100.0% Path Structural Validity (70/70)**, **100.0% Citation Completeness (78/78)**, and **0.0% Unsupported Claims (0/78)** under automated guard checks. We provide complete architectural formalisms, comparative analyses with OpenCTI and MISP, and open reproducibility artifacts.
+We empirically evaluate ThreatMind across a comprehensive verification suite: **262/262 backend tests passing (100.0%) across 41 test files**, **53/53 frontend tests passing (100.0%)**, and **4/4 Phase 11 release verification gates passed (100.0%)**, including MITRE D3FEND catalog digest preservation (`a7a1ebffba...`). On labelled empirical benchmarks comprising authentic CISA advisories and MITRE ATT&CK groups, ThreatMind achieves **100.0% Abstention Precision (5/5)**, **100.0% Abstention Recall (5/5)**, **100.0% Path Structural Validity (70/70)**, **100.0% Citation Completeness (78/78)**, and **0.0% Unsupported Claims (0/78)** under automated guard checks. We provide complete architectural formalisms, comparative analyses with OpenCTI and MISP, and open reproducibility artifacts.
 
 ### Index Terms
 Cyber Threat Intelligence (CTI), Neurosymbolic AI, Knowledge Graphs, GraphRAG, Bayesian Credibility, Allen's Interval Algebra, Attack Path Simulation, MITRE D3FEND, Human-in-the-Loop, Privacy-Preserving Federation, TAXII 2.1, STIX 2.1, Neo4j.
@@ -40,7 +40,7 @@ This paper documents the architecture, formal theory, and empirical evaluation o
 - **Organization-Aware Threat Modeling & Attack Simulation (Phase 14)**: We integrate Software Bill of Materials (SBOM) ingestion, SemVer constraint matching, decomposed organizational risk scoring ($S_{\text{org}}$), and Minimum D3FEND Cut-Set countermeasure synthesis.
 - **Bounded Investigation Orchestrator & Tool Sandbox (Phase 15)**: We formulate a 7-state finite state machine orchestrator with strict tool permission gating, zero autonomous execution guarantees, and Human-in-the-Loop (HITL) approval queues.
 - **Privacy-Preserving Collaborative Sharing & TAXII 2.1 (Phase 16)**: We design multi-boundary sharing policies, persistent salted HMAC-SHA256 pseudonymization rejecting unsalted enumeration, RFC 1918 private IP masking, recursive nested sanitization, RFC 8785 canonical hashing, and non-destructive tombstone retractions.
-- **Rigorous Empirical Verification**: We demonstrate 100.0% pass rates across 244 backend tests (40 test files), 53 frontend tests (11 test files), 4 Phase 11 release verification gates, and labelled benchmark evaluations.
+- **Rigorous Empirical Verification**: We demonstrate 100.0% pass rates across 262 backend tests (41 test files), 53 frontend tests (11 test files), 4 Phase 11 release verification gates, and labelled benchmark evaluations.
 
 ---
 
@@ -251,7 +251,7 @@ TABLE II provides a transparent taxonomy delineating implemented backend service
 | **Phase 14** | Enterprise SBOM & Attack Sim | `asset_service.py`, `cutset_service.py` | 9 Enterprise Intel Tests | SemVer Impact & Cut-Set Path Coverage |
 | **Phase 15** | Bounded AI Investigation Agent | `orchestrator.py`, `investigation_tools.py` | 10 Agent & Security Tests | Claim Grounding & Abstention Benchmark |
 | **Phase 16** | Privacy Sharing & TAXII 2.1 | `taxii_service.py`, `anonymization_service.py` | 9 Federation & Privacy Tests | Salted HMAC & Tombstone Verification |
-| **Total Platform** | **Integrated ThreatMind System** | **Full Neurosymbolic Stack** | **244 Backend / 53 Frontend Tests** | **All Verification Gates Passed** |
+| **Total Platform** | **Integrated ThreatMind System** | **Full Neurosymbolic Stack** | **262 Backend / 53 Frontend Tests** | **All Verification Gates Passed** |
 
 ---
 
@@ -263,8 +263,8 @@ ThreatMind underwent rigorous continuous testing across all 16 phases.
 **TABLE III: Complete Verification Suite Pass Rates**
 | Test Suite / Release Gate | Executed | Passed | Failed | Pass Rate | Execution Duration |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Backend Unit & Integration Suite (Pytest)** | 244 | 244 | 0 | **100.0%** | 26.06s |
-| **Frontend Component & Workstation Suite (Vitest)** | 53 | 53 | 0 | **100.0%** | 23.86s |
+| **Backend Unit & Integration Suite (Pytest)** | 262 | 262 | 0 | **100.0%** | 36.30s |
+| **Frontend Component & Workstation Suite (Vitest)** | 53 | 53 | 0 | **100.0%** | 20.55s |
 | **Phase 11 Release Verification Gates** | 4 | 4 | 0 | **100.0%** | 11.20s |
 | **Gate 1: MITRE D3FEND Catalog Integrity** | 18 | 18 | 0 | **100.0%** | Verified SHA-256 (`a7a1ebffba...`) |
 | **Gate 2: Defensive Recommendations API** | 8 | 8 | 0 | **100.0%** | Edge cases & deduplication |
