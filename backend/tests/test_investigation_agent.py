@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.core.security import create_access_token
 from app.models.investigation import (
     ActionApprovalStatus,
     ActionRiskLevel,
@@ -196,10 +197,16 @@ def test_investigation_evaluation_benchmark():
 # ============================================================================
 
 def test_investigation_api_run_and_actions():
+    token = create_access_token(user_id="api_analyst", tenant_id="tenant_api_test", role="analyst")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Tenant-ID": "tenant_api_test"
+    }
+
     # 1. Run investigation endpoint
     resp = client.post(
         "/api/v1/investigation-agent/run",
-        headers={"X-Tenant-ID": "tenant_api_test"},
+        headers=headers,
         json={
             "tenant_id": "tenant_api_test",
             "analyst_id": "api_analyst",
@@ -217,14 +224,14 @@ def test_investigation_api_run_and_actions():
     # 2. Get report endpoint
     get_resp = client.get(
         f"/api/v1/investigation-agent/reports/{report_id}",
-        headers={"X-Tenant-ID": "tenant_api_test"}
+        headers=headers
     )
     assert get_resp.status_code == 200
 
     # 3. List actions endpoint
     act_resp = client.get(
         "/api/v1/investigation-agent/actions",
-        headers={"X-Tenant-ID": "tenant_api_test"}
+        headers=headers
     )
     assert act_resp.status_code == 200
     actions = act_resp.json()
@@ -234,10 +241,9 @@ def test_investigation_api_run_and_actions():
     act_id = actions[0]["action_id"]
     rev_resp = client.post(
         f"/api/v1/investigation-agent/actions/{act_id}/review",
-        headers={"X-Tenant-ID": "tenant_api_test"},
+        headers=headers,
         json={
             "decision": "APPROVED",
-            "approver": "api_analyst_lead",
             "notes": "Approved via API integration test."
         }
     )
@@ -245,7 +251,10 @@ def test_investigation_api_run_and_actions():
     assert rev_resp.json()["approval_status"] == "APPROVED"
 
     # 5. Evaluate benchmark endpoint
-    eval_resp = client.post("/api/v1/investigation-agent/evaluate")
+    eval_resp = client.post(
+        "/api/v1/investigation-agent/evaluate",
+        headers=headers
+    )
     assert eval_resp.status_code == 200
     assert eval_resp.json()["unsupported_claim_rate"] == 0.0
 
@@ -272,10 +281,11 @@ def test_vulnerability_lookup_unknown_returns_unavailable_not_fabricated():
 
 def test_tenant_spoofing_rejected_403():
     """Verify that passing an unauthorized X-Tenant-ID header conflicting with token is blocked."""
+    token_alpha = create_access_token(user_id="analyst_1", tenant_id="tenant_alpha", role="analyst")
     resp = client.post(
         "/api/v1/investigation-agent/run",
         headers={
-            "Authorization": "Bearer analyst-tenant_alpha",
+            "Authorization": f"Bearer {token_alpha}",
             "X-Tenant-ID": "tenant_beta"  # Spoof attempt
         },
         json={
