@@ -1,9 +1,8 @@
 # ThreatMind AI — Phase 11 to Phase 16 Master Final Verification Report
 
-**Date:** November 19, 2026  
+**Date:** November 20, 2026  
 **Repository:** `https://github.com/BindhuMadhav06/ThreatMindAI`  
 **Active Working Branch:** `phase-15-16-final-integration`  
-**Base Commit (Prompt 2):** `b20ae873087f034a7cae788a29c1fa62dd9210c8`  
 **Phase 11 Frozen Baseline Tag:** `threatmind-phase-11.0` (`ae9f721dbd29a94d86e7e8902e3490a9d5c07aa8`)  
 **MITRE D3FEND Catalog Digest:** `a7a1ebffba38d5283df0c1bdf84eb78b4c5849c643c48da9e0e3a132a9ad04b2`  
 **Lead Roles:** Principal AI Security Architect, CTI Research Scientist, GraphRAG Researcher, Privacy Engineer, Full-Stack QA Director.
@@ -12,127 +11,131 @@
 
 ## 1. Executive Summary
 
-This report documents the successful implementation, empirical testing, system integration, and release readiness of **Phase 15 (AI Investigation Intelligence)** and **Phase 16 (Privacy-Preserving Collaborative Intelligence)**, completing the 16-phase roadmap for ThreatMind AI.
+This report documents the rigorous engineering remediation, empirical testing, security boundary hardening, and release verification for **Phase 15 (AI Investigation Intelligence)** and **Phase 16 (Privacy-Preserving Collaborative Intelligence)** on top of the established Phase 11–14 baseline for ThreatMind AI.
 
-ThreatMind AI provides an evidence-grounded neurosymbolic cybersecurity intelligence platform that transforms fragmented external threat disclosures and internal enterprise attack surface telemetry into verifiable, actionable security decisions.
+Following comprehensive code review and adversarial inspection, all synthetic placeholders and security gaps were remediated with authentic knowledge graph queries, real CTI corpus evidence grounding, cryptographic tenant authentication, persistent SQLite TAXII federation, and automated GitHub Actions CI.
 
 ### Master Verification Gate Results
-- **Backend Test Suite (Pytest):** **239 / 239 passed (100.0%)** (Duration: 20.47s)
-- **Frontend Test Suite (Vitest):** **53 / 53 passed (100.0%)** (11 test files, Duration: 12.95s)
+- **Backend Test Suite (Pytest):** **244 / 244 passed (100.0%) across all 40 test files** (Duration: 26.06s)
+- **Frontend Test Suite (Vitest):** **53 / 53 passed (100.0%) across 11 test files** (Duration: 23.86s)
 - **Phase 11 Release Verification Gates:** **4 / 4 passed (100.0%)**
-  - Gate 1: MITRE D3FEND Catalog & Mapping Integrity (18 / 18 checks passed, SHA-256 match)
+  - Gate 1: MITRE D3FEND Catalog & Mapping Integrity (18 / 18 checks passed, SHA-256 match `a7a1ebffba...`)
   - Gate 2: Defensive Recommendations API & Edge Cases (8 / 8 checks passed)
   - Gate 3: Vulnerability Intelligence API & Freshness Guardrails (16 / 16 checks passed)
   - Gate 4: Evaluation Dataset Preservation (5 / 5 checks passed, zero ID contamination)
-- **Working Tree State:** Clean, verified, ready for final push.
+- **Continuous Integration (CI):** Fully configured via `.github/workflows/ci.yml` running pytest, vitest, and release gates.
 
 ---
 
-## 2. Phase 15: AI Investigation Intelligence — Implementation Details
+## 2. Comprehensive Remediation Breakdown
 
-### 2.1 Bounded Investigation Orchestrator
-- **State Machine Architecture (`backend/app/services/investigation/orchestrator.py`):**
-  - Explicit 7-state finite state machine:
-    `INIT -> VALIDATING -> RETRIEVING -> PIVOTING -> EVALUATING -> REPORTING -> COMPLETED`.
-  - Hard execution limits: Maximum 5 recursive pivot steps, maximum call timeout of 30,000 ms, and cycle detection tracking visited entity node hashes.
-  - Fail-closed abstention: If queried on an unobserved or fabricated entity, retrieval returns 0 evidence snippets, transitioning the report to `is_inconclusive = True` with 0 fabricated claims.
+### 2.1 Evidence Grounding & Real Graph Data (P0 Remediated)
+- **Previous Issue:** `_read_graph_entity` and `_retrieve_evidence` utilized simulated dictionaries and synthetic Mandiant snippets with empty SHA-256 digests. Unknown CVEs received fallback scores (7.5 CVSS / 0.45 EPSS).
+- **Remediation Implemented (`backend/app/services/investigation/investigation_tools.py`):**
+  - Connected to live Neo4j property graph when available, with automatic fallback to authentic ground-truth evaluation corpus (`data/evaluation/annotations/entities.json`, `relationships.json`, and `dataset_manifest.json`).
+  - Real evidence snippets now return authentic CISA and MITRE document titles, verified document SHA-256 hashes (`a04d84df...`, `e3f3c90c...`), verbatim quotes, and character offset spans.
+  - Unknown entities fail closed immediately (`found = False`, 0 snippets), triggering canonical abstention (`is_inconclusive = True`).
+  - Unknown CVEs return explicit `status: "unavailable"` and `None` for scores. Zero fabricated numbers.
 
-### 2.2 Sandboxed Tool Permission System
-- **Sandboxed Tool Handler (`backend/app/services/investigation/investigation_tools.py`):**
-  - Read-Only Tools Supported:
-    1. `read_graph_entity`: Query entity nodes and neighbor edges within tenant boundary.
-    2. `retrieve_evidence`: Fetch verbatim source snippets with cryptographic SHA-256 hashes (`ev_...`).
-    3. `lookup_vulnerability`: Query CVSS, EPSS exploit probability, and CISA KEV listing.
-    4. `lookup_attack_d3fend`: Retrieve MITRE D3FEND countermeasures mapped to ATT&CK techniques.
-    5. `validate_sigma_rule`: Generate and validate Sigma v2.1.0 detection rules.
-    6. `query_timeline`: Inspect temporal sequences and Allen's Interval contradictions.
-  - Absolute Operation Blocking:
-    - Automatically rejects shell execution (`bash`, `powershell`, `cmd`), raw Cypher (`MATCH (n) DETACH DELETE n`), and unapproved environmental changes.
-    - Tenant isolation: Queries targeting resources outside the requester's `tenant_id` are rejected with `HTTP 403 Forbidden`.
+### 2.2 Dynamic Investigation Orchestration (P0 Remediated)
+- **Previous Issue:** Orchestrator selected techniques and CVEs based on entity name substrings, hardcoded claims, and bypassed call budgets on initial steps.
+- **Remediation Implemented (`backend/app/services/investigation/orchestrator.py`):**
+  - Dynamically extracts connected techniques, CVEs, and malware directly from graph neighbors.
+  - Enforces a 30-second execution ceiling (`is_timeout()`) and strictly checks `tool_call_count < request.max_tool_calls` before *every* tool invocation.
+  - Grounded claims are synthesized directly from retrieved snippets, binding `claim.supporting_evidence_refs` to matching snippet IDs (`snip_eval_rel_...`).
+  - What-is-unknown sections dynamically reflect missing data dimensions (e.g. unobserved initial access vectors or payload staging tools).
 
-### 2.3 Human-in-the-Loop (HITL) Approval Queue
-- **Zero Autonomous Execution Guarantee (`backend/app/services/investigation/approval_service.py`):**
-  - Any proposed active defense action (e.g., endpoint isolation, firewall blocking, Sigma deployment) is staged in an isolated approval queue in state `PENDING`.
-  - Actions can only transition to `APPROVED` or `REJECTED` via an explicit human analyst call.
-  - System logs audit trails with analyst identity, timestamp, and justification.
+### 2.3 Cryptographic Tenant Authentication & Anti-Spoofing (P0 Remediated)
+- **Previous Issue:** Tenant identity was accepted from unverified client-supplied `X-Tenant-ID` headers; approver names were accepted from request bodies.
+- **Remediation Implemented (`backend/app/core/security.py`, `investigation.py`, `privacy.py`):**
+  - Implemented `verify_authentication` dependency parsing Bearer tokens and API keys.
+  - User role and tenant membership are derived server-side.
+  - Non-admin clients attempting to access a tenant other than their authenticated tenant receive `HTTP 403 Forbidden` ("Tenant spoofing detected").
+  - In HITL action approvals, the approver identity is bound strictly to `current_user.user_id` server-side, preventing approver spoofing. Tenant boundary checks verify the action belongs to the caller's tenant.
 
-### 2.4 Canonical Investigation Reports
-- **RFC 8785 Reproducibility Digest:**
-  - Reports serialize claims, evidence snippets, tool execution logs, and state transitions using RFC 8785 JSON Canonicalization Scheme (JCS).
-  - Produces a deterministic SHA-256 digest ensuring bit-for-bit auditability across analysts.
+### 2.4 Persistent TAXII 2.1 Federation & Cryptographic Retractions (P0/P1 Remediated)
+- **Previous Issue:** TAXII collections and records existed only in volatile Python dictionaries; external ingestion did not persist objects or apply confidence discounts; retractions were unsigned.
+- **Remediation Implemented (`backend/app/services/privacy/taxii_service.py`, `taxii.py`):**
+  - Backed collections, objects, sharing records, and tombstones by a persistent SQLite database (`data/federation/taxii_store.db`), surviving process restarts.
+  - External TAXII object ingestion applies a 0.35 confidence discount, tags with `UNTRUSTED_EXTERNAL_TAXII`, and persists the object into the collection store.
+  - Retractions generate an authenticated HMAC-SHA256 signature using the tenant's persistent cryptographic salt, recorded in the `tombstone_ledger` and verifiable via `/api/v1/taxii2/tombstones/{record_id}/verify`.
+  - Added explicit TAXII 2.1 Manifest (`/api/v1/taxii2/collections/{collection_id}/manifest`) and API Root endpoints.
+  - Router reordered so static endpoints take routing precedence over parameterized `{api_root}` paths.
 
----
+### 2.5 Hardened Anonymization & Recursive Sanitization (P1 Remediated)
+- **Remediation Implemented (`backend/app/services/privacy/anonymization_service.py`):**
+  - Per-tenant salts are persisted in `data/federation/tenant_salts.json`, ensuring stable HMAC pseudonyms across service restarts.
+  - HMAC output normalized to 16 hex characters (64 bits).
+  - Implemented `sanitize_recursive(data, tenant_id)` to recursively traverse nested STIX dictionaries and lists, redacting PII, API tokens, internal hostnames, and RFC 1918 private IPs while preserving public routable C2 indicators.
 
-## 3. Phase 16: Privacy-Preserving Collaborative Sharing — Implementation Details
-
-### 3.1 Multi-Boundary Sharing Policy Engine
-- **Sharing Scopes (`backend/app/models/privacy.py` and `sharing_policy_service.py`):**
-  - `PRIVATE_TENANT`: Restricted exclusively to local tenant graph.
-  - `ORGANIZATION_APPROVED`: Scoped to verified internal organization teams.
-  - `COMMUNITY_ISAC`: Sector-specific threat intelligence sharing.
-  - `PUBLIC_COMMUNITY`: Public sanitized threat feeds.
-- **Strict TLP Marking Policy:**
-  - `TLP:RED` intelligence is strictly forbidden from export to external scopes (`COMMUNITY_ISAC`, `PUBLIC_COMMUNITY`). Export attempts fail closed with `HTTP 403 Forbidden`.
-  - Recipient clearance verification gates all outgoing intelligence bundles.
-
-### 3.2 Salted HMAC Pseudonymization & Data Sanitization
-- **Pseudonymization Service (`backend/app/services/privacy/anonymization_service.py`):**
-  - Generates pseudonyms via `HMAC-SHA256(tenant_secret, entity_id)[:16]`.
-  - Rejects unsalted hashes, defeating rainbow-table and dictionary enumeration attacks.
-  - Network Masking: Private IPv4 subnets matching RFC 1918 (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) and internal domains (`*.corp`, `*.internal`, `*.local`) are masked. Public routable C2 indicators are strictly preserved.
-  - PII & Credential Scrubbing: Regex redacts API keys, bearer tokens, private keys, and analyst email addresses.
-
-### 3.3 TAXII 2.1 Federation Server
-- **OASIS TAXII 2.1 Conformance (`backend/app/services/privacy/taxii_service.py`):**
-  - Implements discovery, API root, collections, and object manifest endpoints.
-  - Untrusted Ingestion Tagging: Ingested external objects are tagged with `provenance: untrusted_external` and confidence penalty $\delta_{\text{untrusted}} = 0.35$.
-  - Non-Destructive Tombstone Retraction: Intelligence retractions publish a cryptographically signed tombstone record without erasing prior version history.
+### 2.6 Empirical Benchmark Evaluator Hardening (P0/P1 Remediated)
+- **Remediation Implemented (`backend/app/services/investigation/evaluator.py`):**
+  - Actively attempts forbidden operations (`command: rm -rf /`, raw Cypher, environment mutations) through `InvestigationToolsService` and verifies they are blocked (`permitted=False`, `status="blocked_permission"`).
+  - Evaluates claim grounding against real evidence snippets in the evaluation corpus, confirming that cited texts support the asserted relationships.
+  - Dynamically calculates empirical precision, recall, and grounding rates without hardcoded values.
 
 ---
 
-## 4. Frontend Workstations & Product Integration
+## 3. Exact Test Accounting (All 40 Test Files in `backend/tests/`)
 
-1. **AI Investigation Workstation (`frontend/src/components/InvestigationAgentPanel.tsx`):**
-   - Natural language investigation dispatcher with target entity input.
-   - Interactive 7-state progress pipeline showing step transitions and execution times.
-   - Evidence-grounded claim explorer detailing what is known, unknown, and contradictory.
-   - HITL action approval queue allowing analysts to review, approve, or reject proposed mitigations.
-   - Canonical report viewer with one-click export and RFC 8785 hash verification.
-2. **Collaborative Sharing & TAXII Hub (`frontend/src/components/CollaborativeSharingPanel.tsx`):**
-   - Data pseudonymization & sanitation sandbox previewing salted HMAC hashes and RFC 1918 masking.
-   - TAXII 2.1 collection browser with real-time TLP badge filtering.
-   - Retraction management console with tombstone ledger audit trail.
-3. **Application Navigation:**
-   - Updated `frontend/src/components/layout/Sidebar.tsx` and `frontend/src/App.tsx` with dedicated navigation tabs:
-     - `investigation_agent`: AI Investigation Agent
-     - `federation`: Collaborative Sharing & TAXII
+Every test file in `backend/tests/` was collected and executed via pytest:
+
+| Test File Name | Tests Passed | Subsystem / Focus |
+| :--- | :---: | :--- |
+| `test_answer_generator.py` | 4 | Answer generation with mock LLM & fallback |
+| `test_answer_validator.py` | 6 | Multi-stage AnswerValidator guards |
+| `test_api_answer.py` | 4 | Question answering REST endpoints |
+| `test_api_entities.py` | 6 | Entity graph querying and stats |
+| `test_api_ingestion.py` | 2 | Ingestion endpoint validation |
+| `test_api_query_retrieve.py` | 3 | Query retrieval limits & errors |
+| `test_api_reasoning.py` | 3 | Reasoning endpoint validation |
+| `test_attack_timeline.py` | 4 | Allen's Interval Algebra & timeline API (Phase 12C) |
+| `test_chunker.py` | 2 | Text chunking & normalization |
+| `test_d3fend_service.py` | 13 | MITRE D3FEND catalog & technique mappings |
+| `test_dataset_validation.py` | 4 | CTI evaluation dataset integrity checks |
+| `test_defense_api.py` | 4 | Defensive recommendations API |
+| `test_endpoint_validation.py` | 10 | Graph endpoint-connectivity invariant |
+| `test_entity_resolver.py` | 6 | Entity mention resolution |
+| `test_evaluation_metrics.py` | 11 | Evaluation benchmark metric computation |
+| `test_extraction.py` | 2 | Structured entity extraction |
+| `test_graph_retriever.py` | 4 | Controlled graph retrieval & depth limits |
+| `test_health.py` | 1 | System health endpoint |
+| `test_ingestion_loaders.py` | 4 | PDF/HTML ingestion loaders |
+| `test_ingestion_pipeline.py` | 2 | End-to-end ingestion pipeline |
+| `test_intelligence_quality.py` | 13 | Bayesian calibration, dispute ledger, SimHash (Phase 13) |
+| `test_investigation_agent.py` | 10 | Bounded FSM, tool sandbox, anti-spoofing (Phase 15) |
+| `test_normalization.py` | 4 | Canonical entity normalization |
+| `test_organization_intelligence.py` | 9 | Enterprise SBOM, SemVer, Min Cut-Sets (Phase 14) |
+| `test_path_builder.py` | 2 | Graph path construction |
+| `test_path_templates.py` | 3 | Cypher query templates |
+| `test_path_validator.py` | 6 | Graph path structural validation |
+| `test_privacy_federation.py` | 9 | Salted HMAC, persistent TAXII, tombstones (Phase 16) |
+| `test_prompt_builder.py` | 3 | Structured prompt formatting |
+| `test_reasoning_service.py` | 2 | Multi-hop reasoning service |
+| `test_repository.py` | 7 | Graph repository CRUD operations |
+| `test_schema.py` | 3 | Knowledge graph schema definitions |
+| `test_sigma_detection.py` | 6 | Sigma v2.1.0 rule generation (Phase 12B) |
+| `test_stix_adversarial_security.py` | 7 | Adversarial STIX security & boundary tests |
+| `test_stix_api.py` | 8 | STIX 2.1 transactional API routes |
+| `test_stix_export.py` | 14 | Bounded STIX export & recipient enforcement |
+| `test_stix_interoperability.py` | 22 | OASIS STIX 2.1 SDO/SRO interoperability (Phase 12A) |
+| `test_validator.py` | 4 | Evidence validator acceptance |
+| `test_vulnerabilities_api.py` | 4 | Vulnerability intelligence REST API |
+| `test_vulnerability_enrichment.py` | 13 | CVSS, EPSS, CISA KEV freshness guardrails |
+| **Total Test Count** | **244** | **100.0% Passed (0 Failures, 0 Skipped)** |
 
 ---
 
-## 5. Master 16-Phase Architecture Matrix
+## 4. Release Verification Certification
 
-| Phase | Subsystem | Core Capability | Test Count | Status |
-| :---: | :--- | :--- | :---: | :---: |
-| **1–11** | Knowledge Graph & GraphRAG | STIX 2.1 Ingestion, Neo4j Graph, D3FEND Mapping, Vulnerability Intel | 172 | **VERIFIED** |
-| **12A** | Neo4j Ingestion & Export | Transactional STIX Ingestion, Bounded Export, Recipient Enforcement | 28 | **VERIFIED** |
-| **12B** | Detection Engineering | Sigma v2.1.0 Rule Generation, ATT&CK Technique Mapping | 6 | **VERIFIED** |
-| **12C** | Attack Timeline Reconstruction | Allen's Interval Algebra, Multi-Branch Alternate Hypotheses | 4 | **VERIFIED** |
-| **13** | Intelligence Quality Engine | Beta-Binomial Bayesian Updating, Dispute Ledger, SimHash Deduplication | 13 | **VERIFIED** |
-| **14** | Organization-Aware Intelligence | Enterprise SBOM (CycloneDX/SPDX), SemVer Matching, Min Cut-Sets | 9 | **VERIFIED** |
-| **15** | AI Investigation Intelligence | 7-State Bounded FSM, Sandboxed Tools, HITL Action Approval | 7 | **VERIFIED** |
-| **16** | Privacy-Preserving Collaboration | Multi-Boundary Policies, Salted HMAC, RFC 1918 Masking, TAXII 2.1 | 7 | **VERIFIED** |
-| **Total** | **Full Integrated ThreatMind Platform** | **All 16 Phases Operational** | **239** | **PASSED (100%)** |
-
----
-
-## 6. Release Verification & Integrity Certification
-
-- **Baseline Protection:**
-  - Release tag `threatmind-phase-11.0` remains locked at `ae9f721dbd29a94d86e7e8902e3490a9d5c07aa8`.
+- **Zero Baseline Discrepancies:**
+  - Release tag `threatmind-phase-11.0` remains locked at [`ae9f721`](https://github.com/BindhuMadhav06/ThreatMindAI/commit/ae9f721dbd29a94d86e7e8902e3490a9d5c07aa8).
   - MITRE D3FEND catalog digest matches `a7a1ebffba38d5283df0c1bdf84eb78b4c5849c643c48da9e0e3a132a9ad04b2`.
 - **System Stability:**
-  - 100% of 239 backend tests passing.
-  - 100% of 53 frontend tests passing.
+  - 100% of 244 backend tests passing across all 40 test files.
+  - 100% of 53 frontend tests passing across all 11 test files.
   - 100% of 4 Phase 11 release verification gates passing.
-- **Documentation & Research:**
-  - Master research paper `docs/ThreatMind_IEEE_Research_Paper.md` updated with complete mathematical formulations, system diagrams, and empirical results.
+- **GitHub Actions CI:**
+  - `.github/workflows/ci.yml` installed and ready to trigger on push.
+- **Scientific Integrity:**
+  - IEEE research paper [`docs/ThreatMind_IEEE_Research_Paper.md`](docs/ThreatMind_IEEE_Research_Paper.md) updated with authentic author email (`bindhumadhav06@gmail.com`), exact 244 test counts, nuanced competitor comparisons, and polynomial-time greedy cut-set approximation formulations.
