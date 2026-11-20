@@ -239,3 +239,84 @@ def test_privacy_and_taxii_api_endpoints():
     taxii_cols = client.get("/api/v1/taxii2/collections")
     assert taxii_cols.status_code == 200
     assert len(taxii_cols.json()["collections"]) >= 2
+
+
+# ============================================================================
+# Test Group 10: Persistent TAXII Manifest, Ingestion & Recursive Sanitization
+# ============================================================================
+
+def test_persistent_taxii_manifest_and_tombstone_verification():
+    taxii = TAXIIFederationService()
+
+    # 1. Ingest external object with confidence discount
+    raw_obj = {
+        "id": "indicator--federated-test-01",
+        "type": "indicator",
+        "confidence": 1.0,
+        "name": "External C2 Indicator"
+    }
+    ingested = taxii.ingest_external_taxii_object("collection_isac_shared", raw_obj, "TestFeed")
+    assert ingested["confidence"] == 0.65  # 0.35 confidence discount applied!
+    assert ingested["threatmind_provenance"]["confidence_discount"] == 0.35
+
+    # 2. Verify Manifest returns STIX 2.1 media type
+    manifest = taxii.get_collection_manifest("collection_isac_shared")
+    assert len(manifest) >= 1
+    found = any(m["id"] == "indicator--federated-test-01" for m in manifest)
+    assert found is True
+
+    # 3. Publish an object and retract with cryptographic signature
+    record = taxii.publish_object_to_collection(
+        collection_id="collection_isac_shared",
+        tenant_id="tenant_audit_test",
+        obj={"id": "indicator--audit-01", "name": "Audit Observable", "ip": "10.10.10.10"}
+    )
+    ret_req = CollaborationRetractionRequest(
+        record_id=record.record_id,
+        tenant_id="tenant_audit_test",
+        reason="Revoked during security audit.",
+        analyst_id="lead_analyst"
+    )
+    retracted = taxii.retract_intelligence(ret_req)
+    assert retracted.status == "RETRACTED"
+
+    # 4. Verify tombstone cryptographic signature
+    v_res = taxii.verify_tombstone(record.record_id)
+    assert v_res["verified"] is True
+    assert len(v_res["signature"]) == 64
+
+
+def test_recursive_sanitization_nested_objects():
+    anonymizer = AnonymizationService()
+    nested_payload = {
+        "id": "report--001",
+        "name": "Internal Breach Analysis",
+        "description": "Exfiltration from host dc1.corp.internal with token Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "network": {
+            "source_ip": "10.0.5.12",  # RFC 1918 private IP
+            "c2_ip": "198.51.100.88",   # Public routable C2 IP
+            "internal_dns": "dns.corp.internal"
+        },
+        "indicators": [
+            {"ip": "172.16.0.4", "type": "internal"},
+            {"ip": "203.0.113.1", "type": "public"}
+        ]
+    }
+
+    sanitized = anonymizer.sanitize_recursive(nested_payload, tenant_id="tenant_rec_test")
+
+    # 1. Credentials scrubbed
+    assert "[REDACTED_CREDENTIAL]" in sanitized["description"]
+    assert "eyJhbGci" not in sanitized["description"]
+
+    # 2. Private IPs pseudonymized
+    assert sanitized["network"]["source_ip"].startswith("pseudonym-ip-")
+    assert sanitized["indicators"][0]["ip"].startswith("pseudonym-ip-")
+
+    # 3. Internal hostnames pseudonymized
+    assert sanitized["network"]["internal_dns"].startswith("pseudonym-host-")
+    assert "corp.internal" not in sanitized["network"]["internal_dns"]
+
+    # 4. Public C2 indicators PRESERVED intact for threat intelligence sharing
+    assert sanitized["network"]["c2_ip"] == "198.51.100.88"
+    assert sanitized["indicators"][1]["ip"] == "203.0.113.1"
