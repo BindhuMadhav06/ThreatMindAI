@@ -231,6 +231,52 @@ class StixEntityMapper:
                 "created": marking_def.created.isoformat(),
                 "name": marking_def.name,
                 "canonical_digest": current_digest,
+                "tenant_id": tenant_id or "shared",
+            },
+            "raw_payload": marking_payload,
+        }
+        return "created", None
+
+    def resolve_and_stage_marking_definition(
+        self,
+        marking_def: StixMarkingDefinition,
+        raw_obj: Dict[str, Any],
+        tenant_id: str = "shared",
+    ) -> Tuple[str, Optional[Dict[str, Any]]]:
+        """
+        Processes and stages a STIX MarkingDefinition object with canonical hashing.
+        Marking definitions are strictly immutable; conflicts on identical ID return rejection.
+        """
+        stix_id = marking_def.id
+        marking_payload = marking_def.model_dump(mode="python", exclude_none=True)
+        current_digest = compute_canonical_digest(marking_payload)
+
+        # Check existing marking definitions by STIX ID
+        if stix_id in self.marking_definition_digests:
+            existing_digest = self.marking_definition_digests[stix_id]
+            if existing_digest == current_digest:
+                return "merged", None
+            else:
+                # Full-object content mismatch on non-versionable object
+                conflict_record = {
+                    "stix_id": stix_id,
+                    "existing_digest": existing_digest,
+                    "incoming_digest": current_digest,
+                    "reason": "Marking definitions are non-versionable; content conflict detected.",
+                }
+                return "immutable_marking_conflict_rejected", conflict_record
+
+        # Store new definition
+        self.marking_definition_digests[stix_id] = current_digest
+        self.entities_by_stix_id[stix_id] = {
+            "labels": ["MarkingDefinition"],
+            "properties": {
+                "id": stix_id,
+                "stix_id": stix_id,
+                "created": marking_def.created.isoformat(),
+                "name": marking_def.name,
+                "canonical_digest": current_digest,
+                "tenant_id": tenant_id or "shared",
             },
             "raw_payload": marking_payload,
         }
@@ -240,19 +286,24 @@ class StixEntityMapper:
         self,
         sdo: SupportedStixSdo,
         raw_obj: Dict[str, Any],
+        tenant_id: str = "shared",
     ) -> Tuple[str, Optional[Dict[str, Any]]]:
         """
-        Executes the 4-Tier Conservative Resolution Hierarchy:
+        Executes the 4-Tier Conservative Resolution Hierarchy with explicit multi-tenant isolation:
         - Checks permanent revocation
+        - Enforces cross-tenant non-interference: tenant A cannot mutate tenant B private objects
+        - Enforces global intelligence protection: tenant-private import cannot mutate global records
         - Tier 1: Canonical Identifier Match
         - Tier 2: Persistent STIX ID Match (versioning rules)
         - Tier 3: Unique Exact Normalized Name & Alias Match
         - Tier 4: Ambiguity Detected -> Quarantine in ambiguous_entity_conflicts
         """
         stix_id = sdo.id
+        effective_tenant = tenant_id or "shared"
 
         model_payload = sdo.model_dump(mode="python", exclude_none=True)
         graph_entity = self.map_sdo_to_graph_properties(sdo)
+        graph_entity["properties"]["tenant_id"] = effective_tenant
         graph_entity["raw_payload"] = model_payload
         incoming_digest = compute_canonical_digest(model_payload)
         graph_entity["canonical_digest"] = incoming_digest
@@ -277,6 +328,28 @@ class StixEntityMapper:
         # Tier 2 Check: Existing STIX ID match
         if stix_id in self.entities_by_stix_id:
             existing_entity = self.entities_by_stix_id[stix_id]
+            existing_tenant = existing_entity.get("properties", {}).get("tenant_id", "shared")
+
+            # A. Multi-tenant isolation guard: Tenant A cannot overwrite or mutate Tenant B's private entity
+            if existing_tenant not in ("shared", "global") and existing_tenant != effective_tenant:
+                conflict_record = {
+                    "stix_id": stix_id,
+                    "reason": f"Cross-tenant conflict: object '{stix_id}' belongs privately to tenant '{existing_tenant}'.",
+                }
+                return "tenant_conflict_isolated", conflict_record
+
+            # B. Global threat intelligence protection: Tenant-private import cannot mutate a globally shared entity
+            if existing_tenant in ("shared", "global") and effective_tenant not in ("shared", "global"):
+                existing_digest = existing_entity.get("canonical_digest") or compute_canonical_digest(existing_entity.get("raw_payload", {}))
+                if incoming_digest == existing_digest:
+                    return "merged", None
+                else:
+                    conflict_record = {
+                        "stix_id": stix_id,
+                        "reason": "Tenant-private import cannot overwrite or mutate a globally shared intelligence record.",
+                    }
+                    return "tenant_conflict_isolated", conflict_record
+
             existing_modified_str = existing_entity["properties"]["modified"]
             existing_modified = datetime.fromisoformat(existing_modified_str)
             existing_digest = existing_entity.get("canonical_digest") or compute_canonical_digest(existing_entity["raw_payload"])
@@ -306,8 +379,9 @@ class StixEntityMapper:
                     "modified": existing_modified_str,
                     "payload": existing_entity["raw_payload"],
                 })
-                # Update entity properties
+                # Update entity properties while preserving existing tenant scope
                 existing_entity["properties"].update(graph_entity["properties"])
+                existing_entity["properties"]["tenant_id"] = existing_tenant
                 existing_entity["raw_payload"] = model_payload
                 existing_entity["canonical_digest"] = incoming_digest
                 return "updated", None

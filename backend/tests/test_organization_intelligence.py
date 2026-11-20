@@ -77,6 +77,48 @@ def test_asset_inventory_tenant_isolation():
     assert cross_read is None
 
 
+def test_asset_inventory_sqlite_durability_across_restarts(tmp_path):
+    """
+    Verifies that AssetInventoryService persists assets and SBOM packages to SQLite
+    and reloads cleanly across service process restarts.
+    """
+    db_file = tmp_path / "test_inventory.db"
+
+    # Instance 1: Create and populate assets
+    service1 = AssetInventoryService(db_path=db_file)
+    asset_alpha = Asset(
+        asset_id="asset_persist_01",
+        name="Durable Database Server",
+        tenant_id="tenant_durable",
+        asset_type=AssetType.SERVER,
+        criticality=AssetCriticality.MISSION_CRITICAL,
+        installed_software=[
+            SoftwarePackage(name="postgresql", version="15.2"),
+            SoftwarePackage(name="openssl", version="1.1.1t"),
+        ],
+    )
+    service1.register_asset(asset_alpha)
+
+    # Verify in Instance 1
+    found1 = service1.get_asset("asset_persist_01", tenant_id="tenant_durable")
+    assert found1 is not None
+    assert len(found1.installed_software) == 2
+
+    # Instance 2: Simulate restart with new service instance on same DB file
+    service2 = AssetInventoryService(db_path=db_file)
+    found2 = service2.get_asset("asset_persist_01", tenant_id="tenant_durable")
+    assert found2 is not None
+    assert found2.name == "Durable Database Server"
+    assert found2.criticality == AssetCriticality.MISSION_CRITICAL
+    assert len(found2.installed_software) == 2
+    assert found2.installed_software[0].name == "postgresql"
+    assert found2.installed_software[0].version == "15.2"
+
+    # Verify cross-tenant isolation survives restart
+    cross = service2.get_asset("asset_persist_01", tenant_id="other_tenant")
+    assert cross is None
+
+
 # ============================================================================
 # Test Group 12: CycloneDX and SPDX SBOM Ingestion (14.1)
 # ============================================================================

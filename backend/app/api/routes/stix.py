@@ -85,6 +85,7 @@ def get_stix_user_context(
 async def import_stix_bundle(
     request: Request,
     dry_run: bool = Query(default=False, description="Preview import without mutating database or cache state"),
+    is_global: bool = Query(default=False, description="Import as globally shared intelligence (admin only)"),
     current_user: AuthenticatedUser = Depends(require_stix_role),
 ) -> Dict[str, Any]:
     """
@@ -96,8 +97,17 @@ async def import_stix_bundle(
     - Enforces 50MB maximum body payload limit (HTTP 413)
     - Enforces cryptographic Bearer token / API-key authorization with analyst/admin role (HTTP 401/403)
     - Enforces SSRF protection: external citations/URLs are treated strictly as passive text
+    - Enforces tenant isolation: user-submitted intel is bound to current tenant; global import requires admin
     - Sanitizes internal exceptions to avoid leaking server implementation details
     """
+    if is_global and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Only platform administrators can import global threat intelligence.",
+        )
+
+    effective_tenant = "shared" if is_global else current_user.tenant_id
+
     # 1. Enforce 50MB Payload Ceiling
     content_length = request.headers.get("content-length")
     if content_length:
@@ -141,7 +151,12 @@ async def import_stix_bundle(
 
     # 3. Execute Two-Pass Ingestion
     try:
-        result = stix_service.ingest_bundle(bundle, dry_run=dry_run)
+        result = stix_service.ingest_bundle(
+            bundle,
+            dry_run=dry_run,
+            tenant_id=effective_tenant,
+            is_global=is_global,
+        )
     except Exception as e:
         logger.error(f"STIX ingestion failed with unexpected exception: {str(e)}", exc_info=True)
         raise HTTPException(

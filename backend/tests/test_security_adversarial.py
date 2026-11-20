@@ -592,3 +592,208 @@ def test_organization_endpoints_require_authentication():
     assert resp_spoof.status_code == 403
     assert "Tenant spoofing detected" in resp_spoof.json()["detail"]
 
+
+# ---------------------------------------------------------------------------
+# 10. PERSISTENT RECIPIENT CAPABILITIES & STIX IMPORT ISOLATION
+# ---------------------------------------------------------------------------
+
+def test_recipient_registry_sqlite_durability_across_restarts(tmp_path):
+    """
+    Verifies that RecipientCapabilityRegistry persists recipient records to SQLite
+    and reloads cleanly across service process restarts.
+    """
+    from app.core.security import RecipientCapabilityRegistry
+
+    db_file = tmp_path / "test_recipients.db"
+
+    # Instance 1: Register and revoke recipients
+    reg1 = RecipientCapabilityRegistry(db_path=db_file)
+    reg1.register_recipient(
+        recipient_id="user_durable_internal",
+        tenant_id="tenant_durable",
+        is_internal_org_member=True,
+        is_extension_aware=True,
+    )
+    reg1.register_recipient(
+        recipient_id="user_durable_revoked",
+        tenant_id="tenant_durable",
+        is_internal_org_member=True,
+        is_extension_aware=True,
+    )
+    reg1.revoke_recipient("user_durable_revoked")
+
+    # Instance 2: Simulate restart with new instance pointing to same SQLite database
+    reg2 = RecipientCapabilityRegistry(db_path=db_file)
+
+    rec1 = reg2.get_recipient("user_durable_internal")
+    assert rec1 is not None
+    assert rec1.is_internal_org_member is True
+    assert rec1.is_extension_aware is True
+    assert rec1.revoked is False
+
+    rec2 = reg2.get_recipient("user_durable_revoked")
+    assert rec2 is not None
+    assert rec2.revoked is True
+
+    # Check resolve_capabilities on reg2
+    u1 = AuthenticatedUser(
+        user_id="user_durable_internal",
+        role="analyst",
+        tenant_id="tenant_durable",
+    )
+    caps1 = reg2.resolve_capabilities(user=u1, header_org_internal="true")
+    assert caps1["is_internal_org_member"] is True
+
+    # Revoked user falls back to user token default (False)
+    u2 = AuthenticatedUser(
+        user_id="user_durable_revoked",
+        role="analyst",
+        tenant_id="tenant_durable",
+        is_internal_org_member=False,
+    )
+    caps2 = reg2.resolve_capabilities(user=u2, header_org_internal="true")
+    assert caps2["is_internal_org_member"] is False
+
+
+def test_stix_import_isolation_and_admin_global_guard():
+    """
+    Tests P0 Explicit Data Ownership & STIX Import Isolation:
+    - Non-admin user requesting is_global=true is denied with HTTP 403.
+    - Admin user requesting is_global=true succeeds; object gets tenant_id='shared'.
+    - Tenant A user imports private STIX bundle; object gets tenant_id='tenant_a'.
+    - Tenant B user attempts to import bundle overwriting Tenant A's private STIX object -> rejected with tenant_conflict_isolated.
+    - Tenant B user attempting cross-tenant relationship linking Tenant A's private entity is rejected.
+    """
+    # 1. Non-admin attempting is_global=true -> 403 Forbidden
+    token_analyst_a = create_access_token(user_id="analyst_iso_a", tenant_id="tenant_alpha", role="analyst")
+    bundle_global = {
+        "type": "bundle",
+        "id": "bundle--11111111-1111-4111-8111-111111111111",
+        "objects": [
+            {
+                "type": "vulnerability",
+                "spec_version": "2.1",
+                "id": "vulnerability--22222222-2222-4222-8222-222222222222",
+                "created": "2026-02-15T00:00:00.000Z",
+                "modified": "2026-02-15T00:00:00.000Z",
+                "name": "CVE-2026-9999",
+            }
+        ],
+    }
+    resp = client.post(
+        "/api/v1/stix/import?is_global=true",
+        headers={"Authorization": f"Bearer {token_analyst_a}"},
+        json=bundle_global,
+    )
+    assert resp.status_code == 403
+    assert "Forbidden: Only platform administrators" in resp.json()["detail"]
+
+    # 2. Admin importing global intelligence -> 200 OK
+    token_admin = create_access_token(user_id="admin_user", tenant_id="platform_admin", role="admin")
+    resp_admin = client.post(
+        "/api/v1/stix/import?is_global=true",
+        headers={"Authorization": f"Bearer {token_admin}"},
+        json=bundle_global,
+    )
+    assert resp_admin.status_code == 200
+    assert resp_admin.json()["status"] == "success"
+
+    # 3. Tenant A imports private vulnerability
+    private_cve_id = "vulnerability--33333333-3333-4333-8333-333333333333"
+    bundle_tenant_a = {
+        "type": "bundle",
+        "id": "bundle--33333333-3333-4333-8333-333333333331",
+        "objects": [
+            {
+                "type": "vulnerability",
+                "spec_version": "2.1",
+                "id": private_cve_id,
+                "created": "2026-02-15T00:00:00.000Z",
+                "modified": "2026-02-15T00:00:00.000Z",
+                "name": "CVE-2026-8888",
+            }
+        ],
+    }
+    resp_a = client.post(
+        "/api/v1/stix/import",
+        headers={"Authorization": f"Bearer {token_analyst_a}"},
+        json=bundle_tenant_a,
+    )
+    assert resp_a.status_code == 200
+    assert resp_a.json()["status"] == "success"
+
+    # 4. Tenant B attempts to import bundle overwriting Tenant A's private STIX object
+    token_analyst_b = create_access_token(user_id="analyst_iso_b", tenant_id="tenant_beta", role="analyst")
+    bundle_tenant_b_spoof = {
+        "type": "bundle",
+        "id": "bundle--44444444-4444-4444-8444-444444444441",
+        "objects": [
+            {
+                "type": "vulnerability",
+                "spec_version": "2.1",
+                "id": private_cve_id,
+                "created": "2026-02-15T00:00:00.000Z",
+                "modified": "2026-02-16T00:00:00.000Z",
+                "name": "CVE-2026-8888-Mutated",
+            }
+        ],
+    }
+    resp_b = client.post(
+        "/api/v1/stix/import",
+        headers={"Authorization": f"Bearer {token_analyst_b}"},
+        json=bundle_tenant_b_spoof,
+    )
+    assert resp_b.status_code == 200
+    b_data = resp_b.json()
+    assert b_data["status"] == "partial_success"
+    assert len(b_data["rejection_ledger"]["rejected_and_isolated"]) > 0
+    isolated_reasons = [r["reason"] for r in b_data["rejection_ledger"]["rejected_and_isolated"]]
+    assert any("Cross-tenant conflict" in r for r in isolated_reasons)
+
+    # 5. Tenant B exports bundle using CVE-2026-8888 as seed -> does not return Tenant A's private entity
+    resp_export_b = client.get(
+        f"/api/v1/stix/export/bundle?entity_ids={private_cve_id}",
+        headers={"Authorization": f"Bearer {token_analyst_b}"},
+    )
+    assert resp_export_b.status_code == 200
+    export_objects = resp_export_b.json().get("objects", [])
+    assert not any(obj.get("id") == private_cve_id for obj in export_objects)
+
+    # 6. Tenant B creates an attack-pattern and attempts relationship to Tenant A's private vulnerability
+    ap_id = "attack-pattern--55555555-5555-4555-8555-555555555555"
+    rel_id = "relationship--66666666-6666-4666-8666-666666666666"
+    bundle_tenant_b_rel = {
+        "type": "bundle",
+        "id": "bundle--55555555-5555-4555-8555-555555555551",
+        "objects": [
+            {
+                "type": "attack-pattern",
+                "spec_version": "2.1",
+                "id": ap_id,
+                "created": "2026-02-15T00:00:00.000Z",
+                "modified": "2026-02-15T00:00:00.000Z",
+                "name": "Spearphishing Link",
+            },
+            {
+                "type": "relationship",
+                "spec_version": "2.1",
+                "id": rel_id,
+                "created": "2026-02-15T00:00:00.000Z",
+                "modified": "2026-02-15T00:00:00.000Z",
+                "relationship_type": "targets",
+                "source_ref": ap_id,
+                "target_ref": private_cve_id,
+            }
+        ],
+    }
+    resp_b_rel = client.post(
+        "/api/v1/stix/import",
+        headers={"Authorization": f"Bearer {token_analyst_b}"},
+        json=bundle_tenant_b_rel,
+    )
+    assert resp_b_rel.status_code == 200
+    b_rel_data = resp_b_rel.json()
+    assert b_rel_data["status"] == "partial_success"
+    rel_rejections = b_rel_data["rejection_ledger"]["rejected_and_isolated"]
+    assert any("Cross-tenant relationship rejected" in r.get("reason", "") for r in rel_rejections)
+

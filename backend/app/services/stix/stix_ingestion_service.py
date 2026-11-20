@@ -106,13 +106,22 @@ class StixIngestionService:
             return stix_id.split("--", 1)[0]
         return ""
 
-    def ingest_bundle(self, bundle_dict: Dict[str, Any], dry_run: bool = False) -> Dict[str, Any]:
+    def ingest_bundle(
+        self,
+        bundle_dict: Dict[str, Any],
+        dry_run: bool = False,
+        tenant_id: Optional[str] = None,
+        is_global: bool = False,
+    ) -> Dict[str, Any]:
         """
         Executes Two-Pass Ingestion on a STIX 2.1 bundle:
         Pass 1: Process and stage MarkingDefinitions, ExtensionDefinitions, and SDOs.
         Pass 2: Classify and resolve SRO relationships via 4-way tuple framework.
         Supports dry_run=True (pure preview without state mutations) and transactional rollback on error.
+        Enforces tenant scoping: global threat intel ("shared") vs tenant-private intel.
         """
+        effective_tenant = "shared" if is_global or tenant_id in (None, "shared", "global") else tenant_id
+
         # Snapshot state for rollback and dry-run isolation
         snapshot_entities = copy.deepcopy(self.mapper.entities_by_stix_id)
         snapshot_revoked = set(self.mapper.revoked_stix_ids)
@@ -184,7 +193,7 @@ class StixIngestionService:
             if obj_type == "marking-definition":
                 try:
                     marking_def = StixMarkingDefinition.model_validate(raw_obj)
-                    status, conflict = self.mapper.resolve_and_stage_marking_definition(marking_def, raw_obj)
+                    status, conflict = self.mapper.resolve_and_stage_marking_definition(marking_def, raw_obj, tenant_id=effective_tenant)
                     if status == "created":
                         accepted_marking_ids.add(marking_def.id)
                         staged_nodes_for_bundle.append(self.mapper.entities_by_stix_id[marking_def.id])
@@ -209,6 +218,7 @@ class StixIngestionService:
                         "properties": ext_def.model_dump(),
                         "raw_payload": raw_obj,
                     }
+                    ext_entry["properties"]["tenant_id"] = effective_tenant
                     self.mapper.entities_by_stix_id[ext_def.id] = ext_entry
                     staged_nodes_for_bundle.append(ext_entry)
                     nodes_created += 1
@@ -280,7 +290,7 @@ class StixIngestionService:
                 continue
 
             # 3. Resolve and Stage in Entity Mapper
-            status, detail = self.mapper.resolve_sdo(sdo, raw_obj)
+            status, detail = self.mapper.resolve_sdo(sdo, raw_obj, tenant_id=effective_tenant)
             if status == "created":
                 staged_nodes_for_bundle.append(self.mapper.entities_by_stix_id[stix_id])
                 nodes_created += 1
@@ -291,8 +301,9 @@ class StixIngestionService:
                 nodes_updated += 1
             elif status == "revoked_object_update_rejected":
                 rejection_ledger["revoked_object_update_rejected"].append(detail)
+            elif status == "tenant_conflict_isolated":
+                rejection_ledger["rejected_and_isolated"].append(detail)
             elif status in ("version_conflict_quarantined", "ambiguity_quarantined"):
-                pass  # Already staged in mapper.ambiguous_entity_conflicts
                 pass  # Already staged in mapper.ambiguous_entity_conflicts
 
         # =========================================================================
@@ -390,6 +401,22 @@ class StixIngestionService:
                     })
                     continue
 
+                # Cross-tenant boundary check for private tenants
+                src_entity = self.mapper.entities_by_stix_id[sro.source_ref]
+                tgt_entity = self.mapper.entities_by_stix_id[sro.target_ref]
+                src_tenant = src_entity.get("properties", {}).get("tenant_id", "shared")
+                tgt_tenant = tgt_entity.get("properties", {}).get("tenant_id", "shared")
+
+                if effective_tenant not in ("shared", "global"):
+                    if (src_tenant not in ("shared", "global") and src_tenant != effective_tenant) or \
+                       (tgt_tenant not in ("shared", "global") and tgt_tenant != effective_tenant):
+                        rejection_ledger["rejected_and_isolated"].append({
+                            "id": sro_id,
+                            "tuple": rel_tuple,
+                            "reason": f"Cross-tenant relationship rejected: Tenant '{effective_tenant}' cannot link across private tenant boundaries ('{src_tenant}' -> '{tgt_tenant}').",
+                        })
+                        continue
+
                 # Deduplication and staging
                 edge_key = (sro.source_ref, rel_type, sro.target_ref)
                 if edge_key in self.relationships_by_key or any(r["id"] == sro.id for r in self.stored_relationships):
@@ -404,6 +431,7 @@ class StixIngestionService:
                         "modified": sro.modified.isoformat(),
                         "object_marking_refs": sro.object_marking_refs,
                         "confidence": sro.confidence,
+                        "tenant_id": effective_tenant,
                     }
                     self.relationships_by_key[edge_key] = edge_dict
                     self.stored_relationships.append(edge_dict)

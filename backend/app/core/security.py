@@ -318,19 +318,62 @@ class RecipientCapabilityRecord(BaseModel):
     is_internal_org_member: bool = False
     is_extension_aware: bool = False
     max_clearance: str = "AMBER"
+    revoked: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class RecipientCapabilityRegistry:
     """
-    Server-side authoritative registry for recipient capabilities.
+    Durable, server-side authoritative registry for recipient capabilities backed by SQLite.
     Enforces Zero Trust Architecture (NIST SP 800-207):
     - Client HTTP headers CANNOT self-elevate internal organization status.
-    - Default-deny: unregistered users have is_internal_org_member=False.
+    - Default-deny: unregistered or revoked users have is_internal_org_member=False.
     - Attempted header spoofing without server registry/token authorization is clamped to False.
+    - Survives process restarts and multi-worker concurrent access via WAL mode.
     """
-    def __init__(self) -> None:
-        self._registry: Dict[str, RecipientCapabilityRecord] = {}
+    def __init__(self, db_path: Optional[str] = None) -> None:
+        if db_path is None:
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+            self.db_path = os.path.join(base_dir, "data", "federation", "recipient_registry.db")
+        else:
+            self.db_path = db_path
+
+        if self.db_path != ":memory:":
+            os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
+
         self._lock = threading.Lock()
+        self._init_db()
+
+    @contextmanager
+    def _connection(self):
+        conn = sqlite3.connect(self.db_path, timeout=30.0, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        if self.db_path != ":memory:":
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    def _init_db(self) -> None:
+        with self._lock:
+            with self._connection() as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS recipient_capabilities (
+                        recipient_id TEXT PRIMARY KEY,
+                        tenant_id TEXT,
+                        is_internal_org_member INTEGER NOT NULL DEFAULT 0,
+                        is_extension_aware INTEGER NOT NULL DEFAULT 0,
+                        max_clearance TEXT NOT NULL DEFAULT 'AMBER',
+                        revoked INTEGER NOT NULL DEFAULT 0,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_recipient_tenant ON recipient_capabilities(tenant_id);")
+                conn.commit()
 
     def register_recipient(
         self,
@@ -340,22 +383,79 @@ class RecipientCapabilityRegistry:
         is_extension_aware: bool = False,
         max_clearance: str = "AMBER",
     ) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
         with self._lock:
-            self._registry[recipient_id] = RecipientCapabilityRecord(
-                recipient_id=recipient_id,
-                tenant_id=tenant_id,
-                is_internal_org_member=is_internal_org_member,
-                is_extension_aware=is_extension_aware,
-                max_clearance=max_clearance,
-            )
+            with self._connection() as conn:
+                conn.execute("""
+                    INSERT OR REPLACE INTO recipient_capabilities (
+                        recipient_id, tenant_id, is_internal_org_member, is_extension_aware,
+                        max_clearance, revoked, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+                """, (
+                    recipient_id,
+                    tenant_id,
+                    1 if is_internal_org_member else 0,
+                    1 if is_extension_aware else 0,
+                    max_clearance,
+                    now_iso,
+                    now_iso,
+                ))
+                conn.commit()
+
+    def revoke_recipient(self, recipient_id: str) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            with self._connection() as conn:
+                cur = conn.execute("""
+                    UPDATE recipient_capabilities
+                    SET revoked = 1, updated_at = ?
+                    WHERE recipient_id = ?
+                """, (now_iso, recipient_id))
+                conn.commit()
+                return cur.rowcount > 0
 
     def lookup_recipient(self, recipient_id: str) -> Optional[RecipientCapabilityRecord]:
         with self._lock:
-            return self._registry.get(recipient_id)
+            with self._connection() as conn:
+                cur = conn.execute("SELECT * FROM recipient_capabilities WHERE recipient_id = ?", (recipient_id,))
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return self._row_to_record(row)
+
+    get_recipient = lookup_recipient
 
     def clear(self) -> None:
+        """Utility for test suite reset."""
         with self._lock:
-            self._registry.clear()
+            with self._connection() as conn:
+                conn.execute("DELETE FROM recipient_capabilities")
+                conn.commit()
+
+    @staticmethod
+    def _row_to_record(row: sqlite3.Row) -> RecipientCapabilityRecord:
+        c_dt = None
+        u_dt = None
+        if row["created_at"]:
+            try:
+                c_dt = datetime.fromisoformat(row["created_at"])
+            except Exception:
+                pass
+        if row["updated_at"]:
+            try:
+                u_dt = datetime.fromisoformat(row["updated_at"])
+            except Exception:
+                pass
+        return RecipientCapabilityRecord(
+            recipient_id=row["recipient_id"],
+            tenant_id=row["tenant_id"],
+            is_internal_org_member=bool(row["is_internal_org_member"]),
+            is_extension_aware=bool(row["is_extension_aware"]),
+            max_clearance=row["max_clearance"],
+            revoked=bool(row["revoked"]),
+            created_at=c_dt,
+            updated_at=u_dt,
+        )
 
     def resolve_capabilities(
         self,
@@ -376,8 +476,11 @@ class RecipientCapabilityRegistry:
            via X-Recipient-Extension-Aware: true (a recipient may declare whether its software
            supports STIX extensions).
         """
-        with self._lock:
-            rec = self._registry.get(user.user_id) or self._registry.get(user.tenant_id)
+        rec = self.lookup_recipient(user.user_id) or self.lookup_recipient(user.tenant_id)
+
+        # Revoked capability records fall back to unverified
+        if rec and rec.revoked:
+            rec = None
 
         server_authorized_internal = user.is_internal_org_member or (rec.is_internal_org_member if rec else False)
 
@@ -407,6 +510,7 @@ class RecipientCapabilityRegistry:
             "is_internal_org_member": effective_internal,
             "is_extension_aware": effective_ext,
             "can_be_internal": server_authorized_internal,
+            "max_clearance": rec.max_clearance if rec else "AMBER",
         }
 
 
