@@ -25,6 +25,7 @@ data/federation/
 # Environment & secrets
 .env
 .env.*
+!.env.example
 *.local
 
 # System & OS files
