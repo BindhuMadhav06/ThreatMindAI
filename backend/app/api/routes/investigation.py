@@ -2,12 +2,15 @@
 API routes for Phase 15 ThreatMind Trusted AI Investigation Agents.
 Provides endpoints for executing bounded investigation plans, querying reports,
 reviewing Human-in-the-Loop defensive actions, and running evaluation benchmarks.
+Enforces cryptographic authentication, server-side tenant derivation,
+and strict anti-spoofing boundaries on every endpoint.
 """
 
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 
+from app.core.security import AuthenticatedUser, verify_authentication
 from app.models.investigation import (
     ActionApprovalStatus,
     HITLProposedAction,
@@ -34,27 +37,26 @@ evaluator = InvestigationEvaluator()
 
 class ActionReviewRequest(BaseModel):
     decision: ActionApprovalStatus
-    approver: str
     notes: Optional[str] = ""
-
-
-def get_verified_tenant(x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID")) -> str:
-    if not x_tenant_id or not x_tenant_id.strip():
-        return "default_tenant"
-    return x_tenant_id.strip()
+    # Optional client-suggested approver name; server always binds to verified user identity
+    approver: Optional[str] = None
 
 
 @router.post("/run", response_model=InvestigationReport, status_code=status.HTTP_200_OK)
 async def run_investigation(
     request: InvestigationRequest,
-    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID")
+    current_user: AuthenticatedUser = Depends(verify_authentication),
 ) -> InvestigationReport:
     """
     Execute a bounded multi-step investigation against a target entity or alert.
-    Dispatches only permitted read-only tools and records full execution traces.
+    Derives trusted tenant identity server-side from verified credentials.
     """
-    tenant = get_verified_tenant(x_tenant_id)
-    request.tenant_id = tenant
+    # Overwrite/bind tenant to verified server-side identity
+    if not current_user.is_admin or not request.tenant_id:
+        request.tenant_id = current_user.tenant_id
+    if not request.analyst_id:
+        request.analyst_id = current_user.user_id
+
     report = orchestrator.run_investigation(request)
     return report
 
@@ -62,15 +64,14 @@ async def run_investigation(
 @router.get("/reports/{report_id}", response_model=InvestigationReport)
 async def get_investigation_report(
     report_id: str,
-    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID")
+    current_user: AuthenticatedUser = Depends(verify_authentication),
 ) -> InvestigationReport:
-    """Retrieve an investigation report with strict tenant isolation."""
-    tenant = get_verified_tenant(x_tenant_id)
-    report = orchestrator.get_report(report_id, tenant_id=tenant)
+    """Retrieve an investigation report with strict server-side tenant isolation."""
+    report = orchestrator.get_report(report_id, tenant_id=current_user.tenant_id)
     if not report:
         raise HTTPException(
             status_code=404,
-            detail=f"Report '{report_id}' not found for tenant '{tenant}'."
+            detail=f"Report '{report_id}' not found for tenant '{current_user.tenant_id}'."
         )
     return report
 
@@ -78,44 +79,58 @@ async def get_investigation_report(
 @router.get("/actions", response_model=List[HITLProposedAction])
 async def list_proposed_actions(
     status_filter: Optional[ActionApprovalStatus] = Query(None),
-    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID")
+    current_user: AuthenticatedUser = Depends(verify_authentication),
 ) -> List[HITLProposedAction]:
     """List pending or reviewed defensive actions awaiting human approval."""
-    tenant = get_verified_tenant(x_tenant_id)
-    return approval_service.list_actions(tenant_id=tenant, status_filter=status_filter)
+    return approval_service.list_actions(
+        tenant_id=current_user.tenant_id,
+        status_filter=status_filter
+    )
 
 
 @router.post("/actions/{action_id}/review", response_model=HITLProposedAction)
 async def review_action(
     action_id: str,
     req: ActionReviewRequest,
-    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID")
+    current_user: AuthenticatedUser = Depends(verify_authentication),
 ) -> HITLProposedAction:
     """
     Approve or reject a proposed defensive action.
-    Maintains complete audit history and enforces human decision authority.
+    Derives approver identity server-side from verified user identity.
+    Enforces tenant boundary check so tenant A cannot review tenant B's actions.
     """
-    tenant = get_verified_tenant(x_tenant_id)
-    action = approval_service.get_action(action_id, tenant_id=tenant)
+    action = approval_service.get_action(action_id, tenant_id=current_user.tenant_id)
     if not action:
         raise HTTPException(
             status_code=404,
-            detail=f"Proposed action '{action_id}' not found for tenant '{tenant}'."
+            detail=f"Proposed action '{action_id}' not found for tenant '{current_user.tenant_id}'."
         )
+
+    # Server derives approver from verified user identity (preventing spoofing)
+    verified_approver = current_user.user_id
 
     try:
         updated = approval_service.review_action(
             action_id=action_id,
-            approver=req.approver,
+            approver=verified_approver,
             decision=req.decision,
+            tenant_id=current_user.tenant_id,
             notes=req.notes or ""
         )
         return updated
-    except ValueError as e:
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+    except (KeyError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/evaluate", response_model=Dict[str, Any])
-async def evaluate_agent_benchmark() -> Dict[str, Any]:
-    """Run automated investigation evaluation benchmark suite."""
-    return evaluator.run_benchmark()
+async def run_evaluation_benchmark(
+    current_user: AuthenticatedUser = Depends(verify_authentication),
+) -> Dict[str, Any]:
+    """
+    Run the Phase 15 Automated Evaluation Benchmark.
+    Computes precision, recall, grounding rates, and safety enforcement metrics.
+    """
+    metrics = evaluator.run_benchmark()
+    return metrics

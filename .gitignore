@@ -19,6 +19,8 @@ frontend/dist/
 # Local databases & servers
 neo4j-server/
 *.log
+*.db
+data/federation/
 
 # Environment & secrets
 .env
