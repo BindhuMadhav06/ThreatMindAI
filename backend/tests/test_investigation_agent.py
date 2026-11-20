@@ -248,3 +248,64 @@ def test_investigation_api_run_and_actions():
     eval_resp = client.post("/api/v1/investigation-agent/evaluate")
     assert eval_resp.status_code == 200
     assert eval_resp.json()["unsupported_claim_rate"] == 0.0
+
+
+# ============================================================================
+# Test Group 8: Security Boundary & Anti-Spoofing Tests
+# ============================================================================
+
+def test_vulnerability_lookup_unknown_returns_unavailable_not_fabricated():
+    """Verify that unknown CVEs return explicit unavailable status and never invent scores."""
+    tools = InvestigationToolsService()
+    res = tools.execute_tool(
+        permission=ToolPermission.LOOKUP_VULNERABILITY,
+        parameters={"cve_id": "CVE-2099-99999"},
+        tenant_id="tenant_alpha"
+    )
+    assert res.status == "success"
+    data = res.output_data
+    assert data["status"] == "unavailable"
+    assert data["cvss_score"] is None
+    assert data["epss_probability"] is None
+    assert data["cisa_kev_listed"] is False
+
+
+def test_tenant_spoofing_rejected_403():
+    """Verify that passing an unauthorized X-Tenant-ID header conflicting with token is blocked."""
+    resp = client.post(
+        "/api/v1/investigation-agent/run",
+        headers={
+            "Authorization": "Bearer analyst-tenant_alpha",
+            "X-Tenant-ID": "tenant_beta"  # Spoof attempt
+        },
+        json={
+            "tenant_id": "tenant_beta",
+            "analyst_id": "spoofed_analyst",
+            "objective": "Unauthorized tenant investigation",
+            "target_entity": "APT29"
+        }
+    )
+    assert resp.status_code == 403
+    assert "Tenant spoofing detected" in resp.json()["detail"]
+
+
+def test_cross_tenant_action_review_blocked_403():
+    """Verify that tenant B cannot approve an action belonging to tenant A."""
+    # 1. Propose action under tenant_alpha
+    approval = HITLApprovalService()
+    act = approval.propose_action(
+        tenant_id="tenant_alpha",
+        action_type="DEPLOY_SIGMA_DETECTION",
+        proposed_action="Deploy Sigma test rule.",
+        rationale="Test rationale"
+    )
+
+    # 2. Attempt to review while authenticated under tenant_beta
+    with pytest.raises(PermissionError) as exc_info:
+        approval.review_action(
+            action_id=act.action_id,
+            approver="analyst_beta",
+            decision=ActionApprovalStatus.APPROVED,
+            tenant_id="tenant_beta"
+        )
+    assert "Access denied" in str(exc_info.value)
