@@ -21,8 +21,22 @@ class Neo4jConnection:
                     settings.NEO4J_URI,
                     auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD)
                 )
+                self._driver.verify_connectivity()
                 logger.info("Successfully initialized Neo4j driver.")
             except Exception as e:
+                if "localhost" in settings.NEO4J_URI:
+                    alt_uri = settings.NEO4J_URI.replace("localhost", "127.0.0.1")
+                    try:
+                        logger.info(f"Retrying Neo4j connection via IPv4 {alt_uri}...")
+                        self._driver = GraphDatabase.driver(
+                            alt_uri,
+                            auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD)
+                        )
+                        self._driver.verify_connectivity()
+                        logger.info("Successfully initialized Neo4j driver via IPv4.")
+                        return self._driver
+                    except Exception:
+                        pass
                 logger.error(f"Failed to connect to Neo4j database: {str(e)}")
                 self._driver = None
         return self._driver
