@@ -464,8 +464,10 @@ def test_production_mode_fails_closed_on_insecure_jwt_secret():
     incoming requests fail closed with HTTP 500 Internal Server Error.
     """
     original_env = settings.ENVIRONMENT
+    original_key = settings.JWT_SECRET_KEY
     try:
         settings.ENVIRONMENT = "production"
+        settings.JWT_SECRET_KEY = "threatmind-dev-secret-key-change-in-production-min32bytes"
         token = create_access_token(user_id="user_prod", tenant_id="tenant_prod", role="analyst")
         resp = client.get(
             "/api/v1/investigation-agent/actions",
@@ -475,6 +477,7 @@ def test_production_mode_fails_closed_on_insecure_jwt_secret():
         assert "Security configuration error" in resp.json()["detail"]
     finally:
         settings.ENVIRONMENT = original_env
+        settings.JWT_SECRET_KEY = original_key
 
 
 # ---------------------------------------------------------------------------
