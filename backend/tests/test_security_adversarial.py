@@ -13,6 +13,8 @@ Comprehensive adversarial test suite verifying:
 - Prevention of unauthenticated and replay/duplicate action approvals
 """
 
+import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
@@ -21,9 +23,12 @@ import jwt
 from app.main import app
 from app.core.config import settings
 from app.core.security import (
+    ApiKeyStore,
     AuthenticatedUser,
     api_key_store,
     create_access_token,
+    recipient_registry,
+    validate_jwt_secret_configuration,
     verify_authentication,
 )
 from app.models.investigation import (
@@ -42,7 +47,7 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def clean_api_keys_and_actions():
     """Ensure clean state for API keys and approval actions between tests."""
-    api_key_store._keys.clear()
+    api_key_store.clear()
     approval_service._actions_by_id.clear()
     yield
 
@@ -359,3 +364,228 @@ def test_valid_analyst_and_admin_operations_succeed():
     assert resp_rev.status_code == 200
     assert resp_rev.json()["approval_status"] == "APPROVED"
     assert resp_rev.json()["approver"] == "admin_good"
+
+
+# ---------------------------------------------------------------------------
+# 5. SQLITE DURABLE API KEY STORE PERSISTENCE
+# ---------------------------------------------------------------------------
+
+def test_sqlite_api_key_store_durability_across_instances():
+    """
+    Verify that ApiKeyStore persists keys and revocations to SQLite across
+    process restarts or distinct store instances.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        db_file = os.path.join(tmp_dir, "test_api_keys.db")
+
+        # Instance 1: Register key
+        store1 = ApiKeyStore(db_path=db_file)
+        raw_key = "threatmind-persistent-test-api-key-9999"
+        store1.register_key(
+            raw_key=raw_key,
+            user_id="user_persistent",
+            tenant_id="tenant_durable",
+            role="analyst",
+            is_internal_org_member=True,
+        )
+
+        # Instance 2: Lookup from newly instantiated store
+        store2 = ApiKeyStore(db_path=db_file)
+        rec = store2.lookup_key(raw_key)
+        assert rec is not None
+        assert rec.user_id == "user_persistent"
+        assert rec.tenant_id == "tenant_durable"
+        assert rec.role == "analyst"
+        assert rec.is_internal_org_member is True
+        assert rec.revoked is False
+
+        # Instance 1: Revoke the key
+        revoked = store1.revoke_key(raw_key)
+        assert revoked is True
+
+        # Instance 3: Verify revocation persists
+        store3 = ApiKeyStore(db_path=db_file)
+        rec_after_rev = store3.lookup_key(raw_key)
+        assert rec_after_rev is not None
+        assert rec_after_rev.revoked is True
+
+
+# ---------------------------------------------------------------------------
+# 6. PRODUCTION JWT SECRET ENFORCEMENT & FAIL-CLOSED VALIDATION
+# ---------------------------------------------------------------------------
+
+def test_production_jwt_secret_validation_rejects_insecure_keys():
+    """
+    Verifies that validate_jwt_secret_configuration rejects known development keys,
+    short keys, low-entropy keys, and placeholder strings in production mode.
+    """
+    # 1. Dev key in production must fail
+    with pytest.raises(RuntimeError, match="known default or insecure placeholder"):
+        validate_jwt_secret_configuration(
+            secret_key="threatmind-dev-secret-key-change-in-production-min32bytes",
+            environment="production",
+        )
+
+    # 2. Key containing 'change-in-production' must fail
+    with pytest.raises(RuntimeError, match="insecure placeholder pattern"):
+        validate_jwt_secret_configuration(
+            secret_key="some-custom-key-change-in-production-long-enough-32bytes",
+            environment="production",
+        )
+
+    # 3. Short key (< 32 bytes) must fail
+    with pytest.raises(RuntimeError, match="at least 32 bytes"):
+        validate_jwt_secret_configuration(
+            secret_key="short-insecure-key",
+            environment="production",
+        )
+
+    # 4. Low-entropy key must fail
+    with pytest.raises(RuntimeError, match="insufficient character entropy"):
+        validate_jwt_secret_configuration(
+            secret_key="11111111111111111111111111111111",
+            environment="production",
+        )
+
+    # 5. Strong high-entropy key must pass
+    valid_key = "a8F!9zQ#2vL$5mK*7xP&0wR^3yT@1bN%"
+    assert validate_jwt_secret_configuration(secret_key=valid_key, environment="production") is True
+
+    # 6. In development mode, development keys are tolerated
+    assert validate_jwt_secret_configuration(
+        secret_key="threatmind-dev-secret-key-change-in-production-min32bytes",
+        environment="development",
+    ) is True
+
+
+def test_production_mode_fails_closed_on_insecure_jwt_secret():
+    """
+    Verifies that when ENVIRONMENT is production and the secret is insecure,
+    incoming requests fail closed with HTTP 500 Internal Server Error.
+    """
+    original_env = settings.ENVIRONMENT
+    try:
+        settings.ENVIRONMENT = "production"
+        token = create_access_token(user_id="user_prod", tenant_id="tenant_prod", role="analyst")
+        resp = client.get(
+            "/api/v1/investigation-agent/actions",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 500
+        assert "Security configuration error" in resp.json()["detail"]
+    finally:
+        settings.ENVIRONMENT = original_env
+
+
+# ---------------------------------------------------------------------------
+# 7. UNIFIED STIX AUTHENTICATION & SUBSTRING TOKEN REJECTION
+# ---------------------------------------------------------------------------
+
+def test_stix_endpoints_reject_substring_tokens_401():
+    """
+    Guarantees that unverified tokens containing 'analyst' or 'admin' strings
+    are strictly rejected with HTTP 401 across STIX routes.
+    """
+    forgery_headers = [
+        {"Authorization": "Bearer fakeanalyst"},
+        {"Authorization": "Bearer analyst"},
+        {"Authorization": "Bearer not-a-real-analyst-token"},
+        {"Authorization": "Bearer admin"},
+        {"Authorization": "Bearer admin_super_user"},
+    ]
+
+    for h in forgery_headers:
+        # Import route
+        resp_import = client.post("/api/v1/stix/import", json={"type": "bundle", "id": "bundle--1"}, headers=h)
+        assert resp_import.status_code == 401, f"Failed on {h}"
+
+        # Export route
+        resp_export = client.get("/api/v1/stix/export/bundle?investigation_id=inv-1", headers=h)
+        assert resp_export.status_code == 401, f"Failed on {h}"
+
+
+# ---------------------------------------------------------------------------
+# 8. SERVER-SIDE RECIPIENT CAPABILITY REGISTRY & ZERO-TRUST GATING
+# ---------------------------------------------------------------------------
+
+def test_recipient_registry_default_deny_and_anti_spoofing():
+    """
+    Verifies that client header 'X-Recipient-Org-Internal: true' cannot elevate
+    unregistered external recipients to internal status (Zero Trust / default-deny).
+    """
+    recipient_registry.clear()
+
+    # User whose token claims internal=False and who is not in registry
+    ext_user = AuthenticatedUser(
+        user_id="user_ext_01",
+        role="analyst",
+        tenant_id="tenant_partner",
+        is_internal_org_member=False,
+    )
+
+    # Attempt to spoof internal org header
+    caps_spoofed = recipient_registry.resolve_capabilities(
+        user=ext_user,
+        header_org_internal="true",
+        header_extension_aware="true",
+    )
+    # Server clamps to False
+    assert caps_spoofed["is_internal_org_member"] is False
+    assert caps_spoofed["can_be_internal"] is False
+    assert caps_spoofed["is_extension_aware"] is True
+
+    # Register an internal entity in server registry
+    recipient_registry.register_recipient(
+        recipient_id="user_internal_01",
+        tenant_id="tenant_corp",
+        is_internal_org_member=True,
+        is_extension_aware=True,
+    )
+
+    int_user = AuthenticatedUser(
+        user_id="user_internal_01",
+        role="analyst",
+        tenant_id="tenant_corp",
+        is_internal_org_member=False,  # Not in token, but in registry
+    )
+    caps_registered = recipient_registry.resolve_capabilities(
+        user=int_user,
+        header_org_internal="true",
+    )
+    assert caps_registered["is_internal_org_member"] is True
+    assert caps_registered["can_be_internal"] is True
+
+
+# ---------------------------------------------------------------------------
+# 9. ORGANIZATION API UNIFIED AUTHENTICATION & ANTI-SPOOFING
+# ---------------------------------------------------------------------------
+
+def test_organization_endpoints_require_authentication():
+    """
+    Verifies that all Phase 14 Organization-Aware endpoints strictly require
+    authentication and derive tenant membership server-side.
+    """
+    # 1. Unauthenticated asset list -> 401
+    resp_unauth = client.get("/api/v1/organization/assets")
+    assert resp_unauth.status_code == 401
+
+    # 2. Unauthenticated prioritization -> 401
+    resp_prio_unauth = client.get("/api/v1/organization/prioritization")
+    assert resp_prio_unauth.status_code == 401
+
+    # 3. Authenticated asset list -> 200
+    token_tenant_a = create_access_token(user_id="analyst_org_a", tenant_id="tenant_org_a", role="analyst")
+    resp_auth = client.get(
+        "/api/v1/organization/assets",
+        headers={"Authorization": f"Bearer {token_tenant_a}"},
+    )
+    assert resp_auth.status_code == 200
+
+    # 4. Tenant spoofing attempt -> 403 Forbidden
+    resp_spoof = client.get(
+        "/api/v1/organization/assets",
+        headers={"Authorization": f"Bearer {token_tenant_a}", "X-Tenant-ID": "tenant_org_b"},
+    )
+    assert resp_spoof.status_code == 403
+    assert "Tenant spoofing detected" in resp_spoof.json()["detail"]
+

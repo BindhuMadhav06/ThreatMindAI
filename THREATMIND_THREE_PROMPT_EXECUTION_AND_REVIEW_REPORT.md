@@ -64,16 +64,21 @@ flowchart LR
   - Delivered React workstations (`QualityIntelligencePanel.tsx`, `OrganizationIntelligencePanel.tsx`).
   - Increased test coverage to 225 backend tests and 44 frontend tests (100% passing).
 
-### Prompt 3: Phase 15 AI Investigation + Phase 16 Privacy Collaboration + Security Hardening + CI Resolution
+### Prompt 3: Phase 15 AI Investigation + Phase 16 Privacy Collaboration + Complete Security Remediation
 - **Branch:** `phase-15-16-final-integration`
 - **Accomplishments:**
-  - **Cryptographic Security & Tenant Isolation (`backend/app/core/security.py`):**
+  - **Cryptographic Security & Central Authentication Boundary (`backend/app/core/security.py`):**
     - Standards-based RFC 7519 JWT verification via PyJWT with explicit algorithm allowlist (`["HS256"]`), issuer/audience validation, and expiration enforcement.
-    - Hashed server-side API key store with SHA-256 storage, expiration, and instantaneous revocation.
+    - Durable SQLite-backed hashed API key store (`data/federation/api_keys.db`) with WAL mode, preserving keys, roles, and revocations across process restarts.
+    - Server-side `RecipientCapabilityRegistry` with default-deny, preventing client HTTP header spoofing of internal org membership.
+    - Fail-closed production JWT secret key validation (`validate_jwt_secret_configuration`) rejecting development keys and weak passwords.
+  - **P0 STIX & Organization Route Authentication Unification:**
+    - Eliminated custom substring checks (`"admin" in token.lower()`, `"analyst" in token.lower()`, regex parsing) from `stix.py`. STIX endpoints now enforce central `require_stix_role`.
+    - Eliminated insecure tenant header fallback in `organization.py`; all enterprise endpoints derive tenant membership strictly from verified user identity.
     - Client-supplied `X-Tenant-ID` mismatches rejected with `HTTP 403 Forbidden` ("Tenant spoofing detected").
-    - Requests with only `X-Tenant-ID` rejected with `401 Unauthorized`.
+    - Requests with missing or forged credentials rejected with `401 Unauthorized`.
   - **Adversarial Security Test Suite (`backend/tests/test_security_adversarial.py`):**
-    - 17 adversarial security test cases covering missing credentials, empty/malformed tokens, forged signatures, expired credentials, wrong issuer/audience, unsupported algorithms, anti-spoofing headers, unknown/revoked API keys, viewer role rejection, cross-tenant isolation, and replay-resistant HITL governance.
+    - 23 adversarial security test cases covering missing credentials, empty/malformed tokens, forged signatures, expired credentials, wrong issuer/audience, unsupported algorithms, anti-spoofing headers, unknown/revoked API keys, SQLite store durability, production secret validation, STIX substring rejection, recipient registry default-deny, and replay-resistant HITL governance.
   - **Phase 15 AI Investigation Intelligence (`backend/app/services/investigation/`):**
     - Dynamic graph retrieval backed by Neo4j and authentic CTI evaluation corpus (`data/evaluation/`).
     - Verifiable evidence citations with authentic document titles, SHA-256 hashes (`a04d84df...`, `e3f3c90c...`), verbatim quotes, and offset spans.
@@ -88,13 +93,10 @@ flowchart LR
     - Ingested external objects penalized with a 0.35 confidence discount and tagged as `UNTRUSTED_EXTERNAL_TAXII`.
     - Cryptographic HMAC-SHA256 signed tombstones with tamper verification.
     - TAXII 2.1 Collection Manifest endpoint (`/collections/{id}/manifest`).
-  - **GitHub Actions CI Resolution (`.github/workflows/ci.yml`):**
-    - Resolved missing dependencies in `backend/requirements.txt` (`PyYAML`, `pySigma`, `stix2-validator`, `scipy`, `networkx`, `packaging`, `cryptography`, `PyJWT`).
-    - Added Neo4j 5.20.0 service container with health check in CI workflow.
-    - Added dual Python path (`PYTHONPATH: backend:.`).
-    - Upgraded Node to 22 and added frontend production build step (`npm run build`).
+  - **GitHub Actions CI Hardening (`.github/workflows/ci.yml`):**
+    - Fully hardened CI pipeline running Neo4j 5.20.0 service container, Node 22, full backend pytest (271 tests), Phase 11 release gates, frontend vitest (53 tests), and production frontend build.
   - **Academic Documentation:**
-    - Updated `docs/ThreatMind_IEEE_Research_Paper.md` with complete 16-phase neurosymbolic architecture, author credentials (`bindhumadhav06@gmail.com`), exact 41 test file taxonomy, 262 backend / 53 frontend tests, and greedy cut-set approximation properties ($1.0\times$ empirical ratio).
+    - Updated `docs/ThreatMind_IEEE_Research_Paper.md` with complete 16-phase neurosymbolic architecture, author credentials (`bindhumadhav06@gmail.com`), exact 41 test file taxonomy, 271 backend / 53 frontend tests, and greedy cut-set approximation properties ($1.0\times$ empirical ratio).
 
 ---
 
@@ -110,7 +112,7 @@ flowchart LR
 | **Defensive Countermeasures**| Generic | Manual Mapping | Vendor Recommendations | Minimum D3FEND Cut-Sets (100% Interdiction, $1.0\times$ Empirical Ratio) |
 | **Autonomous AI Safety** | None | None | Prompt Guardrails | 7-State FSM + Tool Sandbox + Mandatory Replay-Resistant HITL |
 | **Privacy & Federation** | TLP Tagging | TLP Scopes | Tenant Silos | 128-Bit Versioned Salted HMAC + Deterministic IP Masking + SQLite TAXII 2.1 |
-| **Multi-Tenant Security** | Basic RBAC | Group Scopes | Tenant API Keys | Cryptographic Standards-Based JWT + Hashed API Keys + Anti-Spoofing |
+| **Multi-Tenant Security** | Basic RBAC | Group Scopes | Tenant API Keys | Cryptographic Standards-Based JWT + Durable SQLite API Keys + Anti-Spoofing |
 
 ---
 
@@ -118,11 +120,11 @@ flowchart LR
 
 1. **Deterministic Test Execution Summary:**
    - **Total Backend Test Files:** **41 files** in `backend/tests/`
-   - **Total Backend Test Cases:** **262 passed, 0 failed, 0 skipped (100.0%)** in 36.30s
+   - **Total Backend Test Cases:** **271 passed, 0 failed, 0 skipped (100.0%)** in 47.92s
    - **Total Frontend Test Files:** **11 files** in `frontend/src/`
-   - **Total Frontend Test Cases:** **53 passed, 0 failed (100.0%)** in 20.55s
-   - **Frontend Production Build:** **SUCCESS (exit code 0)** in 26.71s
-   - **Total Test Suite:** **315 passed, 0 failed across entire stack**
+   - **Total Frontend Test Cases:** **53 passed, 0 failed (100.0%)** in 17.93s
+   - **Frontend Production Build:** **SUCCESS (exit code 0)** in 12.65s
+   - **Total Test Suite:** **324 passed, 0 failed across entire stack**
    - **Zero Regression:** All Phase 11 baseline tests preserved and passing.
 2. **Phase 11 Release Verification Gate Results:**
    - **MITRE D3FEND Catalog Digest:** `a7a1ebffba38d5283df0c1bdf84eb78b4c5849c643c48da9e0e3a132a9ad04b2` (EXACT MATCH)
@@ -138,9 +140,9 @@ flowchart LR
    - Autonomous Active Remediation Rate: **0.0% (0/10)**
    - Blocked Permission Rate on Forbidden Commands: **100.0% (14/14)**
 4. **Adversarial Security Test Metrics (`test_security_adversarial.py`):**
-   - 17 / 17 Attack Scenarios Blocked: **100.0% (17/17)**
+   - 23 / 23 Attack Scenarios Blocked: **100.0% (23/23)**
 5. **CI/CD Automation:**
-   - `.github/workflows/ci.yml` validates pytest (262 tests), Phase 11 release gates (4 gates), frontend vitest (53 tests), and production frontend build on every push and pull request.
+   - `.github/workflows/ci.yml` validates pytest (271 tests), Phase 11 release gates (4 gates), frontend vitest (53 tests), and production frontend build on every push and pull request.
 
 ---
 

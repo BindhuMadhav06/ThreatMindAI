@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.core.config import settings
+from app.core.security import create_access_token
 from app.services.stix.stix_validator_service import StixValidatorService
 from app.services.stix.stix_export_service import (
     STANDARD_STIX_TLP_RED_ID,
@@ -80,8 +81,15 @@ def test_a1_external_user_spoofing_internal_header_denied_amber_strict():
     stix_service.ingest_bundle(seed_bundle)
 
     # External analyst credential with spoofed internal header
+    external_token = create_access_token(
+        user_id="external-partner-analyst",
+        tenant_id="tenant-external",
+        role="analyst",
+        is_internal_org_member=False,
+        is_extension_aware=True,
+    )
     headers = {
-        "Authorization": "Bearer external-partner-analyst-token",
+        "Authorization": f"Bearer {external_token}",
         "X-Recipient-Extension-Aware": "true",
         "X-Recipient-Org-Internal": "true",  # Attempted spoofing!
     }
@@ -337,10 +345,11 @@ def test_a7_cypher_injection_in_seeds_denied_or_safely_parameterized():
         "threat-actor--1234' UNION MATCH (s) RETURN s //",
     ]
 
+    analyst_token = create_access_token(user_id="analyst-user", tenant_id="tenant-default", role="analyst")
     for seed in malicious_seeds:
         response = client.get(
             f"/api/v1/stix/export/bundle?actor_id={seed}",
-            headers={"Authorization": "Bearer analyst-valid-token"},
+            headers={"Authorization": f"Bearer {analyst_token}"},
         )
         # Should either return empty bundle (status 200) or safe 400/404, never 500 error from syntax crash
         assert response.status_code in (200, 400, 404)

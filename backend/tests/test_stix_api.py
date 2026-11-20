@@ -1,18 +1,31 @@
 """
 Tests for STIX 2.1 Import API Endpoint: POST /api/v1/stix/import
-Validates authentication, role gating (analyst/admin), payload size limits (50MB ceiling),
-dry-run preview, and rejection handling.
+Validates central authentication, role gating (analyst/admin), payload size limits (50MB ceiling),
+rejection of substring-based token forgery, dry-run preview, and rejection handling.
 """
 
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.security import api_key_store, create_access_token
 
 client = TestClient(app)
 
-ANALYST_HEADERS = {"Authorization": "Bearer analyst-jwt-token"}
-ADMIN_HEADERS = {"Authorization": "Bearer admin-jwt-token"}
-API_KEY_HEADERS = {"X-API-Key": "analyst-secret-key"}
-UNAUTHORIZED_HEADERS = {"Authorization": "Bearer viewer-token"}
+ANALYST_TOKEN = create_access_token(user_id="analyst-stix-user", tenant_id="tenant-stix", role="analyst")
+ADMIN_TOKEN = create_access_token(user_id="admin-stix-user", tenant_id="tenant-stix", role="admin")
+VIEWER_TOKEN = create_access_token(user_id="viewer-stix-user", tenant_id="tenant-stix", role="viewer")
+
+TEST_API_KEY = "threatmind-stix-analyst-api-key-valid-key"
+api_key_store.register_key(
+    raw_key=TEST_API_KEY,
+    user_id="api-analyst-stix-user",
+    tenant_id="tenant-stix",
+    role="analyst",
+)
+
+ANALYST_HEADERS = {"Authorization": f"Bearer {ANALYST_TOKEN}"}
+ADMIN_HEADERS = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+API_KEY_HEADERS = {"X-API-Key": TEST_API_KEY}
+UNAUTHORIZED_HEADERS = {"Authorization": f"Bearer {VIEWER_TOKEN}"}
 
 
 def test_api_stix_import_valid_bundle():
@@ -42,6 +55,12 @@ def test_api_stix_import_valid_bundle():
 
 
 def test_api_stix_import_with_api_key():
+    api_key_store.register_key(
+        raw_key=TEST_API_KEY,
+        user_id="api-analyst-stix-user",
+        tenant_id="tenant-stix",
+        role="analyst",
+    )
     bundle = {
         "type": "bundle",
         "id": "bundle--11112222-3333-4444-5555-666677778888",
@@ -66,7 +85,7 @@ def test_api_stix_import_auth_missing():
     bundle = {"type": "bundle", "id": "bundle--test", "objects": []}
     response = client.post("/api/v1/stix/import", json=bundle)
     assert response.status_code == 401
-    assert "Authentication credentials were not provided" in response.json()["detail"]
+    assert "Authentication credentials" in response.json()["detail"]
 
 
 def test_api_stix_import_auth_insufficient_role():
@@ -74,6 +93,22 @@ def test_api_stix_import_auth_insufficient_role():
     response = client.post("/api/v1/stix/import", json=bundle, headers=UNAUTHORIZED_HEADERS)
     assert response.status_code == 403
     assert "Insufficient privileges" in response.json()["detail"]
+
+
+def test_api_stix_import_substring_token_rejected_401():
+    """
+    Guarantees that tokens merely containing 'analyst' or 'admin' as substrings
+    without a valid cryptographic signature are strictly rejected with 401 Unauthorized.
+    """
+    bundle = {"type": "bundle", "id": "bundle--test", "objects": []}
+
+    fake_analyst_headers = {"Authorization": "Bearer fake-analyst-unverified-token"}
+    resp1 = client.post("/api/v1/stix/import", json=bundle, headers=fake_analyst_headers)
+    assert resp1.status_code == 401
+
+    fake_admin_headers = {"Authorization": "Bearer malicious-admin-substring"}
+    resp2 = client.post("/api/v1/stix/import", json=bundle, headers=fake_admin_headers)
+    assert resp2.status_code == 401
 
 
 def test_api_stix_import_dry_run():
@@ -137,9 +172,9 @@ def test_api_stix_import_partial_success_with_rejections():
 
 
 def test_api_stix_import_payload_size_limit_rejection():
-    # Simulate a payload with header indicating > 50MB
+    # Header indicating > 50MB
     oversized_headers = {
-        "Authorization": "Bearer analyst-token",
+        "Authorization": f"Bearer {ANALYST_TOKEN}",
         "Content-Length": str(55 * 1024 * 1024),
     }
     response = client.post(

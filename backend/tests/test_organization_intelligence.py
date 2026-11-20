@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.core.security import create_access_token
 from app.models.organization import (
     Asset,
     AssetCriticality,
@@ -373,10 +374,13 @@ def test_d3fend_catalog_integrity_digest_preservation():
 # ============================================================================
 
 def test_organization_api_asset_and_prioritization():
+    token = create_access_token(user_id="analyst_org_01", tenant_id="tenant_api_eval", role="analyst")
+    headers = {"Authorization": f"Bearer {token}", "X-Tenant-ID": "tenant_api_eval"}
+
     # Register asset via API
     create_resp = client.post(
         "/api/v1/organization/assets",
-        headers={"X-Tenant-ID": "tenant_api_eval"},
+        headers=headers,
         json={
             "asset_id": "asset_api_01",
             "name": "API Web Gateway",
@@ -392,7 +396,7 @@ def test_organization_api_asset_and_prioritization():
     # List assets for tenant
     list_resp = client.get(
         "/api/v1/organization/assets",
-        headers={"X-Tenant-ID": "tenant_api_eval"}
+        headers=headers
     )
     assert list_resp.status_code == 200
     assets = list_resp.json()
@@ -402,9 +406,25 @@ def test_organization_api_asset_and_prioritization():
     # Get prioritized risk
     risk_resp = client.get(
         "/api/v1/organization/prioritization",
-        headers={"X-Tenant-ID": "tenant_api_eval"}
+        headers=headers
     )
     assert risk_resp.status_code == 200
     risks = risk_resp.json()
     assert len(risks) >= 1
     assert risks[0]["asset_id"] == "asset_api_01"
+
+
+def test_organization_api_unauthenticated_request_rejected():
+    # Calling without credentials must return 401 Unauthorized
+    resp = client.get("/api/v1/organization/assets")
+    assert resp.status_code == 401
+
+
+def test_organization_api_tenant_spoofing_rejected():
+    # Token for tenant_alpha, but header claims tenant_beta -> 403 Forbidden
+    token = create_access_token(user_id="user_alpha", tenant_id="tenant_alpha", role="analyst")
+    headers = {"Authorization": f"Bearer {token}", "X-Tenant-ID": "tenant_beta"}
+    resp = client.get("/api/v1/organization/assets", headers=headers)
+    assert resp.status_code == 403
+    assert "Tenant spoofing" in resp.json().get("detail", "")
+

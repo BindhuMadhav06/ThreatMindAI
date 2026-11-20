@@ -1,17 +1,17 @@
 """
 STIX 2.1 Interoperability API Routes
 Implements transactional import and dry-run preview per OASIS STIX 2.1 Errata 01.
-Enforces 50MB payload limits, Bearer token / API-key role authorization,
+Enforces 50MB payload limits, centralized Bearer token / API-key role authorization,
 passive URL parsing (SSRF protection), and sanitized error responses.
 """
 
 import json
-import re
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from app.core.logging import logger
+from app.core.security import AuthenticatedUser, recipient_registry, require_stix_role
 from app.services.stix.stix_ingestion_service import StixIngestionService
 from app.services.stix.stix_export_service import StixExportService
 
@@ -27,59 +27,6 @@ stix_export_service = StixExportService(
 # 50 MB payload ceiling per Architecture Spec §1.8 / Risk R-1
 MAX_STIX_PAYLOAD_BYTES = 50 * 1024 * 1024
 
-VALID_ROLES = {"analyst", "admin"}
-
-
-def verify_stix_authorization(
-    authorization: Optional[str] = Header(None, alias="Authorization"),
-    api_key: Optional[str] = Header(None, alias="X-API-Key"),
-) -> str:
-    """
-    Enforces Bearer token or API key authentication with 'analyst' or 'admin' role.
-    Rejects missing or invalid tokens with HTTP 401 Unauthorized.
-    Rejects unauthorized roles with HTTP 403 Forbidden.
-    """
-    token = None
-    if authorization:
-        parts = authorization.strip().split()
-        if len(parts) == 2 and parts[0].lower() == "bearer":
-            token = parts[1]
-        elif len(parts) == 1:
-            token = parts[0]
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Malformed Authorization header format. Expected 'Bearer <token>'.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    elif api_key:
-        token = api_key.strip()
-
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication credentials were not provided. Requires Bearer token or X-API-Key header.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Resolve user role from token / key
-    token_lower = token.lower()
-    user_role = None
-    if "admin" in token_lower:
-        user_role = "admin"
-    elif "analyst" in token_lower:
-        user_role = "analyst"
-    elif token_lower in ("guest", "viewer", "public", "user"):
-        user_role = "viewer"
-
-    if not user_role or user_role not in VALID_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Forbidden: Insufficient privileges. Role '{user_role or 'unknown'}' cannot import STIX bundles; requires 'analyst' or 'admin'.",
-        )
-
-    return user_role
-
 
 class StixUserContext(BaseModel):
     """
@@ -89,70 +36,48 @@ class StixUserContext(BaseModel):
     user_id: str = Field(default="user-analyst")
     user_role: str = Field(default="analyst")
     tenant_id: Optional[str] = Field(default=None)
-    is_internal_org_member: bool = Field(default=True)
+    is_internal_org_member: bool = Field(default=False)
     is_extension_aware: bool = Field(default=False)
     clearance: str = Field(default="AMBER")
-    can_be_internal: bool = Field(default=True)
+    can_be_internal: bool = Field(default=False)
 
 
 def get_stix_user_context(
-    authorization: Optional[str] = Header(None, alias="Authorization"),
-    api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    current_user: AuthenticatedUser = Depends(require_stix_role),
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
     x_recipient_extension_aware: Optional[str] = Header(None, alias="X-Recipient-Extension-Aware"),
     x_recipient_org_internal: Optional[str] = Header(None, alias="X-Recipient-Org-Internal"),
 ) -> StixUserContext:
     """
-    Derives trusted user context from server-validated credentials.
+    Derives trusted user context strictly from server-validated credentials.
     Enforces header entitlement clamping: client headers requesting internal org status
-    are denied/clamped to False if the credential indicates an external identity.
+    are denied/clamped to False if the server registry or signed credentials indicate external identity.
     """
-    user_role = verify_stix_authorization(authorization, api_key)
+    # Cross-tenant anti-spoofing guard
+    if x_tenant_id and x_tenant_id.strip():
+        claimed_tenant = x_tenant_id.strip()
+        if claimed_tenant != current_user.tenant_id and not current_user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tenant spoofing detected: client header does not match authenticated identity.",
+            )
 
-    token = ""
-    if authorization:
-        parts = authorization.strip().split()
-        token = parts[1] if len(parts) == 2 else parts[0]
-    elif api_key:
-        token = api_key.strip()
+    caps = recipient_registry.resolve_capabilities(
+        user=current_user,
+        header_extension_aware=x_recipient_extension_aware,
+        header_org_internal=x_recipient_org_internal,
+    )
 
-    token_lower = token.lower()
-    # Check if external user identity
-    is_external = any(ext in token_lower for ext in ("external", "partner", "client", "guest"))
-    can_be_internal = not is_external
-
-    # Derive internal org membership with entitlement clamping:
-    # If external token, client CANNOT assert internal status (spoofing clamped to False)
-    if not can_be_internal:
-        is_internal_org_member = False
-    else:
-        # If internal user, check client request header
-        if x_recipient_org_internal is not None:
-            is_internal_org_member = x_recipient_org_internal.strip().lower() == "true"
-        else:
-            is_internal_org_member = False
-
-    # Derive extension awareness
-    is_extension_aware = (x_recipient_extension_aware or "").strip().lower() == "true"
-
-    # Derive tenant ID
-    tenant_id = None
-    match = re.search(r"tenant-[a-zA-Z0-9_-]+", token)
-    if match:
-        tenant_id = match.group(0)
-    elif x_tenant_id and x_tenant_id.strip():
-        tenant_id = x_tenant_id.strip()
-
-    clearance = "RED" if user_role == "admin" else "AMBER"
+    clearance = "RED" if (current_user.is_admin or current_user.role == "admin" or current_user.clearance == "RED") else current_user.clearance
 
     return StixUserContext(
-        user_id=f"user-{user_role}",
-        user_role=user_role,
-        tenant_id=tenant_id,
-        is_internal_org_member=is_internal_org_member,
-        is_extension_aware=is_extension_aware,
+        user_id=current_user.user_id,
+        user_role=current_user.role,
+        tenant_id=current_user.tenant_id,
+        is_internal_org_member=caps["is_internal_org_member"],
+        is_extension_aware=caps["is_extension_aware"],
         clearance=clearance,
-        can_be_internal=can_be_internal,
+        can_be_internal=caps["can_be_internal"],
     )
 
 
@@ -160,7 +85,7 @@ def get_stix_user_context(
 async def import_stix_bundle(
     request: Request,
     dry_run: bool = Query(default=False, description="Preview import without mutating database or cache state"),
-    user_role: str = Depends(verify_stix_authorization),
+    current_user: AuthenticatedUser = Depends(require_stix_role),
 ) -> Dict[str, Any]:
     """
     Ingest or preview a STIX 2.1 Bundle into ThreatMind AI.
@@ -169,7 +94,7 @@ async def import_stix_bundle(
 
     Guarantees:
     - Enforces 50MB maximum body payload limit (HTTP 413)
-    - Enforces Bearer token / API-key authorization with analyst/admin role (HTTP 401/403)
+    - Enforces cryptographic Bearer token / API-key authorization with analyst/admin role (HTTP 401/403)
     - Enforces SSRF protection: external citations/URLs are treated strictly as passive text
     - Sanitizes internal exceptions to avoid leaking server implementation details
     """
@@ -326,4 +251,3 @@ async def export_stix_bundle(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="STIX bundle export failed due to an internal server error. Check server logs for details.",
         )
-

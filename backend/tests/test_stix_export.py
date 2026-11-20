@@ -18,6 +18,7 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.core.security import create_access_token
 from app.models.stix import StixBundle, SupportedStixSdo
 from app.services.stix.stix_export_service import (
     FIRST_TLP_EXTENSION_DEFINITION_OBJECT,
@@ -30,9 +31,13 @@ from app.services.stix.stix_ingestion_service import StixIngestionService
 
 client = TestClient(app)
 
-ANALYST_AUTH = {"Authorization": "Bearer analyst-valid-token"}
-ADMIN_AUTH = {"Authorization": "Bearer admin-valid-token"}
-VIEWER_AUTH = {"Authorization": "Bearer viewer-invalid-token"}
+ANALYST_TOKEN = create_access_token(user_id="export-analyst-user", tenant_id="tenant-default", role="analyst")
+ADMIN_TOKEN = create_access_token(user_id="export-admin-user", tenant_id="tenant-default", role="admin", is_admin=True, is_internal_org_member=True, is_extension_aware=True)
+VIEWER_TOKEN = create_access_token(user_id="export-viewer-user", tenant_id="tenant-default", role="viewer")
+
+ANALYST_AUTH = {"Authorization": f"Bearer {ANALYST_TOKEN}"}
+ADMIN_AUTH = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+VIEWER_AUTH = {"Authorization": f"Bearer {VIEWER_TOKEN}"}
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +232,7 @@ def test_ac7b_tlp_red_admin_role_cannot_bypass():
 
     # Attempt to export as admin with query param bypass attempts
     headers = {
-        "Authorization": "Bearer admin-super-token",
+        "Authorization": f"Bearer {ADMIN_TOKEN}",
         "X-Recipient-Extension-Aware": "true",
         "X-Recipient-Org-Internal": "true",
     }
@@ -309,8 +314,15 @@ def test_ac7b_amber_strict_extension_unaware_recipient_denied_403():
     stix_service.ingest_bundle(bundle)
 
     # Recipient without X-Recipient-Extension-Aware header (default unaware)
+    internal_unaware_token = create_access_token(
+        user_id="internal-unaware-analyst",
+        tenant_id="tenant-default",
+        role="analyst",
+        is_internal_org_member=True,
+        is_extension_aware=False,
+    )
     headers = {
-        "Authorization": "Bearer analyst-valid-token",
+        "Authorization": f"Bearer {internal_unaware_token}",
         "X-Recipient-Org-Internal": "true",
     }
     response = client.get(f"/api/v1/stix/export/bundle?actor_id={actor_id}", headers=headers)
@@ -327,8 +339,15 @@ def test_ac7b_amber_strict_external_recipient_denied_403():
     is DENIED (HTTP 403 Forbidden).
     """
     actor_id = "threat-actor--88880000-0000-0000-0000-000000000001"
+    external_aware_token = create_access_token(
+        user_id="external-aware-analyst",
+        tenant_id="tenant-default",
+        role="analyst",
+        is_internal_org_member=False,
+        is_extension_aware=True,
+    )
     headers = {
-        "Authorization": "Bearer analyst-valid-token",
+        "Authorization": f"Bearer {external_aware_token}",
         "X-Recipient-Extension-Aware": "true",
         "X-Recipient-Org-Internal": "false",  # External client
     }
@@ -346,8 +365,15 @@ def test_ac7b_amber_strict_authorized_internal_recipient_allowed_200():
     directly to MarkingDefinition, and the Extension Definition object is included.
     """
     actor_id = "threat-actor--88880000-0000-0000-0000-000000000001"
+    internal_aware_token = create_access_token(
+        user_id="internal-aware-analyst",
+        tenant_id="tenant-default",
+        role="analyst",
+        is_internal_org_member=True,
+        is_extension_aware=True,
+    )
     headers = {
-        "Authorization": "Bearer analyst-valid-token",
+        "Authorization": f"Bearer {internal_aware_token}",
         "X-Recipient-Extension-Aware": "true",
         "X-Recipient-Org-Internal": "true",
     }
@@ -385,7 +411,7 @@ def test_ac7b_query_parameter_capability_spoofing_ignored():
     """
     actor_id = "threat-actor--88880000-0000-0000-0000-000000000001"
     # Query parameters carry spoofed capability, but headers omit them
-    headers = {"Authorization": "Bearer analyst-valid-token"}
+    headers = ANALYST_AUTH
     response = client.get(
         f"/api/v1/stix/export/bundle?actor_id={actor_id}&is_extension_aware=true&is_internal_org_member=true",
         headers=headers,
@@ -446,7 +472,7 @@ def test_ac7b_first_tlp_clear_to_white_mapping():
 
     stix_service.ingest_bundle(bundle)
 
-    headers = {"Authorization": "Bearer analyst-valid-token"}
+    headers = ANALYST_AUTH
     response = client.get(f"/api/v1/stix/export/bundle?actor_id={actor_id}", headers=headers)
     assert response.status_code == 200
     exported_bundle = response.json()
@@ -571,7 +597,7 @@ def test_export_authentication_required():
     """
     response = client.get("/api/v1/stix/export/bundle?actor_id=test")
     assert response.status_code == 401
-    assert "Authentication credentials were not provided" in response.json().get("detail", "")
+    assert "Authentication credentials" in response.json().get("detail", "")
 
 
 def test_export_insufficient_role_forbidden():
